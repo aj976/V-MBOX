@@ -1,13 +1,13 @@
 # M1 findings — spike 2, user-reported Windows VM output
 
-This records the VM operator's pasted spike output; it was not independently reproduced here. The spike command and matching scenario output were not supplied, so workload overlap remains unconfirmed. No final event-set decision is made from this output alone.
+This records the VM operator's pasted spike output; it was not independently reproduced here. The operator confirmed that the injection-like simulation ran concurrently in terminal B and produced no output, which is expected for that script. The script exit code and exact overlap timestamps were not recorded. No final event-set decision is made from this output alone.
 
 ## Run identity
 
 - VM snapshot, Windows build, dependency versions, Sysmon config hash, VM Git commit/dirty state: not measured
 - Spike command and requested duration: not measured
 - Reported duration: 34.711 seconds
-- Matching scenario command and output: not measured
+- Matching scenario: operator reports `injection_like_simulation.py` ran concurrently in terminal B; it produced no output; exit code and exact timing not measured
 - Output/log location: pasted into chat; VM file location not measured
 
 ## Observed counts
@@ -35,7 +35,7 @@ This records the VM operator's pasted spike output; it was not independently rep
 - `sysmon:NET_CONNECT`: 6
 - `sysmon:PROC_EXIT`: 4
 - `sysmon:PROC_START`: 4
-- Sysmon ID 8 (`MEM_REMOTE_THREAD`): no event shown in this output; scenario overlap not confirmed
+- Sysmon ID 8 (`MEM_REMOTE_THREAD`): no event shown in this output; the simulation does not create a remote thread
 - Memory-protection-change source and sanitized parser fixtures: not measured
 
 ## Rate and loss
