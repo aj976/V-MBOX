@@ -3,6 +3,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from uuid import UUID, uuid5
 
 import pytest
 from hypothesis import given
@@ -79,7 +80,8 @@ def test_canonical_output_is_byte_identical_across_processes():
        tags=st.lists(st.text(max_size=12), max_size=5))
 def test_event_round_trip(seq, ts_ns, tags):
     data = examples()[0]
-    data.update(seq=seq, ts_ns=ts_ns, tags=tags)
+    data.update(seq=seq, ts_ns=ts_ns, tags=tags,
+                event_id=str(uuid5(UUID(data["session_id"]), str(seq))))
     model = Event.from_dict(data)
     assert Event.from_dict(json.loads(model.to_json())) == model
 
@@ -96,3 +98,30 @@ def test_checkpoint_round_trip(index, seq_end):
 def test_canonical_rejects_nonfinite_float():
     with pytest.raises(ValueError):
         canonical_json({"value": float("nan")})
+
+
+def test_event_nullable_fields_require_partial_or_meta():
+    data = examples()[0]
+    for field in ("pid", "ppid", "process"):
+        changed = json.loads(json.dumps(data))
+        changed[field] = None
+        with pytest.raises(ValueError):
+            Event.from_dict(changed)
+        changed["capture"]["status"] = "partial"
+        Event.from_dict(changed)
+    changed = json.loads(json.dumps(data))
+    changed["process"]["cmdline_hash"] = None
+    with pytest.raises(ValueError):
+        Event.from_dict(changed)
+    changed["capture"]["status"] = "partial"
+    Event.from_dict(changed)
+    meta = json.loads(json.dumps(data))
+    meta.update(event_type="CAPTURE_GAP", category="meta", pid=None, ppid=None, process=None)
+    Event.from_dict(meta)
+
+
+def test_event_id_must_match_session_and_sequence():
+    data = examples()[0]
+    data["event_id"] = "00000000-0000-5000-8000-000000000000"
+    with pytest.raises(ValueError):
+        Event.from_dict(data)

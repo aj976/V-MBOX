@@ -179,3 +179,5 @@ Style: plain, high-contrast, no alarm colors for inferences. Red is reserved for
 | D4 | Offline replay for evaluation | Live-only comparison | Same inputs for every strategy; reproducible |
 | D5 | Anchor on separate VM with own key | Same-host service | Approximates the independent recorder without hardware |
 | D6 | Sysmon proxies for memory | Threat-Intelligence ETW | Accessible without protected-process signing |
+| D7 | Canonical JSON Lines raw trace with a separate exact-byte SHA-256 sidecar | Hash embedded in trace | Keeps the trace stream replayable and makes incomplete writes explicit |
+| D8 | UUIDv5 from session ID and sequence | Random event IDs | Labels remain stable across strategy replays |

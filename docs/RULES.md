@@ -46,7 +46,7 @@ Rules for anyone (human or AI assistant) changing this repo. If a rule blocks th
 
 ## 5. Documentation rules
 
-1. `SCHEMA.md` is the source of truth for formats. Code changes to formats update it in the same commit and bump `schema_version`.
+1. `SCHEMA.md` is the source of truth for formats. Code changes to formats update it in the same commit and bump `schema_version` after the first real artifact is persisted. Before that point, version 1 may be corrected in place.
 2. Design decisions go in the `DESIGN.md` decisions log with the alternative considered.
 3. Docs describe what exists. Planned items are marked "planned".
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 from typing import Any, Literal, TypeVar, get_args, get_origin, get_type_hints
+from uuid import UUID, uuid5
 
 from vmbox.canonical import canonical_json
 
@@ -95,7 +96,7 @@ class SchemaModel:
 @dataclass(frozen=True)
 class ProcessInfo(SchemaModel):
     image: str
-    cmdline_hash: str
+    cmdline_hash: str | None
     cmdline: str | None
 
 
@@ -126,9 +127,9 @@ class Event(SchemaModel):
     ts_source: Literal["etw_qpc", "sysmon_utc", "wallclock", "replay"]
     event_type: str
     category: str
-    pid: int
-    ppid: int
-    process: ProcessInfo
+    pid: int | None
+    ppid: int | None
+    process: ProcessInfo | None
     data: dict[str, Any]
     provenance: Literal["observed"]
     capture: CaptureInfo
@@ -139,8 +140,24 @@ class Event(SchemaModel):
         super().__post_init__()
         if self.schema_version != 1 or self.seq < 0 or self.ts_ns < 0:
             raise ValueError("invalid version, seq or timestamp")
-        if self.pid < 0 or self.ppid < 0 or EVENT_CATEGORIES.get(self.event_type) != self.category:
+        if EVENT_CATEGORIES.get(self.event_type) != self.category:
             raise ValueError("invalid PID or event category")
+        if any(value is not None and value < 0 for value in (self.pid, self.ppid)):
+            raise ValueError("negative PID")
+        if self.process is not None and not self.process.image:
+            raise ValueError("empty process image")
+        if self.process is not None and self.process.cmdline_hash == "":
+            raise ValueError("empty command-line hash")
+        missing = (self.pid is None or self.ppid is None or self.process is None
+                   or self.process.cmdline_hash is None)
+        if missing and self.capture.status != "partial" and self.category != "meta":
+            raise ValueError("missing fields require partial capture or meta event")
+        try:
+            expected_id = str(uuid5(UUID(self.session_id), str(self.seq)))
+        except ValueError as exc:
+            raise ValueError("invalid session_id UUID") from exc
+        if self.event_id != expected_id:
+            raise ValueError("event_id must be UUIDv5(session_id, seq)")
 
 
 @dataclass(frozen=True)

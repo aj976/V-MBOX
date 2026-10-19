@@ -9,8 +9,8 @@ Schema version: `1`. Every segment and manifest records it.
 ```json
 {
   "schema_version": 1,
-  "event_id": "01J...",
-  "session_id": "uuid",
+  "event_id": "34d95801-91cf-5473-bba1-8e0641035cf6",
+  "session_id": "00000000-0000-4000-8000-000000000001",
   "boot_id": "string",
   "seq": 18422,
   "ts_ns": 1760000000123456789,
@@ -32,11 +32,13 @@ Schema version: `1`. Every segment and manifest records it.
 
 | Field | Rule |
 |---|---|
-| `seq` | Strictly increasing per session, assigned by the normalizer *before* selection. Gaps in persisted `seq` are therefore meaningful: either dropped by selection (recorded in tombstone/selection stats) or lost |
+| `seq` | Strictly increasing per session, assigned by the normalizer *before* selection, in raw-trace line order. Gaps in persisted `seq` are therefore meaningful: either dropped by selection (recorded in tombstone/selection stats) or lost |
+| `event_id` | UUIDv5 with namespace UUID `session_id` and name the base-10 `seq` with no leading zeros. Replay retains the trace `session_id` and `event_id`; each strategy run has its own `run_id` |
 | `boot_id` | Derived from system boot time; changes after reboot |
 | `ts_source` | `etw_qpc`, `sysmon_utc`, `wallclock`, `replay`. Timestamps are never assumed trustworthy (see `DESIGN.md` threat model) |
 | `provenance` | `observed` (directly reported by a source), `derived` (computed from observed events, e.g. lineage), `inferred` (heuristic). Only `observed` is allowed on raw events; derived/inferred appear in reconstruction output |
-| `process.cmdline` | Nullable. Stored only if configured; `cmdline_hash` always stored |
+| `pid`, `ppid`, `process`, `process.cmdline_hash` | Nullable only when `capture.status` is `partial` or category is `meta`. Never substitute `0`, `-1`, or empty string for missing data. An `ok` non-meta event requires all four |
+| `process.cmdline` | Nullable. Raw text stored only with the explicit local-only opt-in; otherwise only its hash is stored when available. Selection and priority rules cannot depend on raw command-line content without that opt-in |
 | `priority` | Set by the selector (`null` before). Numeric, strategy-specific |
 | `capture.status` | `ok`, `partial` (some fields unavailable), `source_error`, `dropped_upstream` |
 
@@ -56,6 +58,24 @@ Schema version: `1`. Every segment and manifest records it.
 | `COLLECTOR_START` / `COLLECTOR_STOP` | meta | collector | `config_hash`, `sources` |
 
 Memory events are **proxies** for memory-related activity. Reports must call them what they are.
+
+### Raw trace (M2)
+
+`<trace>.jsonl` is canonical JSON Lines: each line is exactly `canonical_json(object) + LF` in UTF-8. Line 1 is a header. Every later line is one unfiltered source event in arrival order. This order alone determines `seq` in the normalizer; no sorting by timestamps or source. This example is a format template, not captured output:
+
+```text
+{"boot_id":"boot-example","collector_version":"0.1.0","config_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","host":{"windows_build":"not measured"},"raw_cmdline_opt_in":false,"session_id":"00000000-0000-4000-8000-000000000001","sources":["sysmon"],"sysmon_config_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","trace_format_version":1,"trace_id":"00000000-0000-4000-8000-000000000002"}
+{"event_type":"PROC_START","payload":{"CommandLineHash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","Image":"C:\\example.exe","ParentProcessId":"1","ProcessId":"2","UtcTime":"2026-01-01 00:00:00.000"},"receipt_ts_ns":1767225600000000000,"source":"sysmon"}
+```
+
+Header keys are exactly `trace_format_version` (integer 1), `trace_id` (UUID), `session_id` (UUID), `boot_id` (string), `sources` (list of source tags), `collector_version` (string), `config_hash` (SHA-256 tag), `sysmon_config_hash` (SHA-256 tag or null if Sysmon unused), `host` (sanitized object containing `windows_build` only), and `raw_cmdline_opt_in` (boolean). Source-event keys are exactly `source`, `event_type`, `receipt_ts_ns` (integer Unix nanoseconds when received), and `payload` (source-native object). The source tag must occur in the header list. An unknown source event type is an explicit normalization error; it is never silently skipped.
+
+By default, a source `CommandLine` field is replaced with `CommandLineHash` (`sha256:` over its exact UTF-8 bytes) before persistence. If the raw-text opt-in is true, both fields may be present; such traces are local-only and must never be committed. The header records the choice. Absence of both means `cmdline_hash: null` and a `partial` normalized event. This redaction does not filter source events.
+
+`<trace>.jsonl.sha256` contains exactly one canonical JSON line: `{"sha256":"sha256:<64 lowercase hex>"}`. The digest covers the exact trace file bytes, including every LF; it is never embedded in the trace. Trace and sidecar are write-once. A missing sidecar, malformed/torn line, noncanonical line, or digest mismatch makes the trace incomplete or invalid, never complete.
+
+Live-versus-replay identity and overflow `CAPTURE_GAP` behavior are **unverified until run on Windows VM**.
+ETW task-name mapping and QPC timestamp conversion are also **unverified until run on Windows VM**. The normalizer rejects unknown ETW event types rather than guessing their meaning; receipt wallclock time is labeled `wallclock`, never `etw_qpc`.
 
 ## 2. Session manifest
 
