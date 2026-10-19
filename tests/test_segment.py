@@ -6,6 +6,8 @@ from pathlib import Path
 from uuid import UUID, uuid5
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from vmbox.integrity.genesis import manifest_genesis
 from vmbox.integrity.segment import verify_segment
@@ -85,3 +87,23 @@ def test_failed_rename_leaves_only_unsealed_temp(tmp_path: Path, monkeypatch):
     assert not path.exists()
     assert path.with_name(path.name + ".tmp").exists()
     assert verify_segment(path, genesis_tag()).status == "incomplete"
+
+
+@given(st.lists(st.integers(min_value=0, max_value=10000),
+                min_size=1, max_size=6, unique=True), st.integers(min_value=0))
+@settings(deadline=None, max_examples=30)
+def test_segment_property_roundtrip_and_random_byte_flip(sequences, flip_index):
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "seg_00000000.vseg"
+        events = [event(seq) for seq in sorted(sequences)]
+        seal_segment(path, index=0, events=events, prev_hash=genesis_tag(),
+                     strategy="fixed", selection_stats=SelectionStats(
+                         len(events), len(events), 0, {}, 0))
+        assert verify_segment(path, genesis_tag()).events == events
+        assert verify_segment(path, genesis_tag()).status == "ok"
+        original = bytearray(path.read_bytes())
+        original[flip_index % len(original)] ^= 1
+        path.write_bytes(original)
+        assert verify_segment(path, genesis_tag()).status != "ok"
