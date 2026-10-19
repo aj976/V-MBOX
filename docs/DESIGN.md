@@ -182,3 +182,4 @@ Style: plain, high-contrast, no alarm colors for inferences. Red is reserved for
 | D7 | Canonical JSON Lines raw trace with a separate exact-byte SHA-256 sidecar | Hash embedded in trace | Keeps the trace stream replayable and makes incomplete writes explicit |
 | D8 | UUIDv5 from session ID and sequence | Random event IDs | Labels remain stable across strategy replays |
 | D9 | Two checksummed journal cursor slots and explicit wrap padding | Scan an unmarked ring | Identifies the live frame window and flags torn or stale bytes after wrap |
+| D10 | Tombstone metadata has an unkeyed canonical checksum | No tombstone checksum | Detects accidental byte corruption while leaving host-rewrite limits explicit |

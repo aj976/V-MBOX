@@ -135,11 +135,12 @@ When the budget forces eviction, a sealed segment body is deleted and replaced b
   "index": 12, "seq_start": 0, "seq_end": 0, "record_count": 0,
   "ts_start_ns": 0, "ts_end_ns": 0,
   "prev_hash": "sha256:...", "segment_hash": "sha256:...",
-  "evicted_reason": "budget", "evicted_ts_ns": 0
+  "evicted_reason": "budget", "evicted_ts_ns": 0,
+  "tombstone_hash": "sha256:c5a987e9c14cdce4c5104976d93f9334194b7f6b7602b9897753d56d0a33930c"
 }
 ```
 
-The chain still verifies across tombstones because `segment_hash` is retained. The tombstoned content itself is no longer verifiable or recoverable, and the report says so.
+`tombstone_hash` is SHA-256 of `canonical_json` over every other tombstone field. It catches accidental corruption and byte flips in tombstone metadata. The chain still verifies across tombstones because `segment_hash` is retained. The tombstoned content itself is no longer verifiable or recoverable, and the report says so. A host attacker can rewrite a tombstone and recompute this unkeyed checksum; only an external anchor can constrain a rewritten `segment_hash`.
 
 ## 6. Checkpoint and anchor receipt
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from hashlib import sha256
 from typing import Any, Literal, TypeVar, get_args, get_origin, get_type_hints
 from uuid import UUID, uuid5
 
@@ -228,12 +229,18 @@ class Tombstone(SchemaModel):
     segment_hash: str
     evicted_reason: str
     evicted_ts_ns: int
+    tombstone_hash: str
 
     def __post_init__(self) -> None:
         super().__post_init__()
         if min(self.index, self.seq_start, self.seq_end, self.record_count,
                self.ts_start_ns, self.ts_end_ns, self.evicted_ts_ns) < 0:
             raise ValueError("negative tombstone value")
+        content = {key: value for key, value in self.to_dict().items()
+                   if key != "tombstone_hash"}
+        expected = "sha256:" + sha256(canonical_json(content)).hexdigest()
+        if self.tombstone_hash != expected:
+            raise ValueError("tombstone hash mismatch")
 
 
 @dataclass(frozen=True)
