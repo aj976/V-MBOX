@@ -18,6 +18,7 @@ class ChainEntry:
     index: int
     kind: Literal["segment", "tombstone"]
     segment_hash: str
+    seq_end: int | None = None
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ class ChainVerification:
 
 
 def verify_chain(directory: Path, manifest: SessionManifest) -> ChainVerification:
-    """No receipt means trailing deletion cannot be detected; M4 adds that check."""
+    """Verify locally available chain entries; receipts check anchor claims separately."""
     previous = "sha256:" + manifest_genesis(manifest).hex()
     entries: list[ChainEntry] = []
     files: dict[int, dict[str, Path]] = {}
@@ -59,7 +60,7 @@ def verify_chain(directory: Path, manifest: SessionManifest) -> ChainVerificatio
                 return ChainVerification("tampered", "segment index/session mismatch", entries,
                                          previous)
             previous = result.footer.segment_hash
-            entries.append(ChainEntry(index, "segment", previous))
+            entries.append(ChainEntry(index, "segment", previous, result.header.seq_end))
         else:
             result_tomb = verify_tombstone(representations["tomb"], previous, index)
             if result_tomb.status != "metadata_valid" or result_tomb.tombstone is None:
@@ -67,5 +68,6 @@ def verify_chain(directory: Path, manifest: SessionManifest) -> ChainVerificatio
                     "incomplete" if result_tomb.status == "incomplete" else "tampered")
                 return ChainVerification(status, result_tomb.reason, entries, previous)
             previous = result_tomb.tombstone.segment_hash
-            entries.append(ChainEntry(index, "tombstone", previous))
+            entries.append(ChainEntry(index, "tombstone", previous,
+                                      result_tomb.tombstone.seq_end))
     return ChainVerification("ok", None, entries, previous)

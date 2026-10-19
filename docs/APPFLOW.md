@@ -4,13 +4,13 @@ V-MBOX is a CLI tool plus two long-running processes (recorder, anchor). There i
 
 ## 1. Commands
 
-Current implementation: `vmbox verify --evidence <dir>` checks the local canonical manifest, segment/tombstone chain, and journal CRC. It prints `anchor: not checked`; `--anchor-pubkey` is rejected until M4 receipt verification is implemented. The other commands below remain planned.
+Current implementation: `python -m vmbox.cli verify --evidence <dir>` checks the local canonical manifest, segment/tombstone chain, and journal CRC. Add `--anchor-pubkey <public.pem>` to verify the signed host receipt chain against the manifest fingerprint and local segments. Add `--anchor-receipts <export-dir>` to compare with an anchor-side `receipts/` export. Without that export, the host receipt tail is unconfirmed against anchor state. The anchor ledger's offline signing core is implemented; its second-VM transport is **unverified until run on the second VM**. The other commands below remain planned.
 
 | Command | Purpose | Key options |
 |---|---|---|
 | `vmbox record` | Collect, select, persist | `--strategy fixed\|priority\|context`, `--budget 64MB`, `--journal 8MB`, `--out <dir>`, `--anchor host:port`, `--tee-raw <file>` |
 | `vmbox anchor` | Run the checkpoint service | `--listen`, `--key <path>`, `--store <dir>` |
-| `vmbox verify` | Verify chain and receipts | `--evidence <dir>`, `--anchor-pubkey <path>` |
+| `vmbox verify` | Verify chain and receipts | `--evidence <dir>`, `--anchor-pubkey <path>`, `--anchor-receipts <export-dir>` |
 | `vmbox recover` | Post-crash inspection | `--evidence <dir>` |
 | `vmbox timeline` | Reconstruct timeline | `--evidence <dir>`, `--pid`, `--since`, `--until` |
 | `vmbox report` | Produce JSON + HTML report | `--evidence <dir>`, `--out <dir>` |
