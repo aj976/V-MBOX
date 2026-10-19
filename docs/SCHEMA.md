@@ -99,9 +99,9 @@ Written at session start, hashed into the chain genesis.
 
 ## 3. Journal (unsealed)
 
-Append-only file `journal.bin`, a ring of fixed capacity (`journal_bytes`).
+`journal.bin` is a fixed-capacity ring of exactly `journal_bytes`, including its 64-byte control area. All multibyte integers are unsigned big-endian. The first 64 bytes are two 32-byte cursor slots. Each slot is `[u64 generation][u32 oldest_offset][u32 write_offset][u32 used_bytes][u64 evicted_frames][u32 crc32]`. Offsets are relative to the data area that begins at byte 64; CRC32 covers the first 28 slot bytes. A zeroed slot with bad CRC is unused. Recovery selects the highest-generation valid slot; if neither is valid, the journal is incomplete. The writer persists frame bytes before publishing the alternate cursor slot and flushes each phase. `used_bytes` distinguishes an empty ring and bounds the scan; at least one byte remains free.
 
-Frame: `[u32 length][u32 crc32][payload = canonical event JSON]`
+Data frames are `[u32 length][u32 crc32][payload = canonical event JSON]`, where CRC32 covers payload bytes. Frames never cross the end of the data area. At wrap, `[u32 length=0][u32 crc32=0]` marks the unused tail when at least eight bytes remain; any following tail bytes are zero padding. If fewer than eight bytes remain, the entire tail is zero padding. Tail padding counts toward `used_bytes`; the reader wraps to offset zero. An overwritten oldest frame advances `oldest_offset` and increments `evicted_frames`; this count is reported as a retention limit. A bad frame CRC, short length, invalid padding, or noncanonical payload ends valid recovery and is reported as an incomplete write. A crash during overwrite can invalidate previously indexed ring content; recovery must report that gap rather than accept the journal as complete.
 
 - CRC detects torn writes. A frame with bad CRC or short length ends valid data.
 - Journal contents are **unverified**: no chain, no anchor. Reports must label anything recovered only from the journal as such.
@@ -120,7 +120,9 @@ BODY     records: [u32 length][payload]...   (canonical event JSON, ascending se
 FOOTER   (canonical JSON, one line): { "segment_hash":"sha256:...", "body_sha256":"sha256:..." }
 ```
 
-Chain: `H(i) = SHA-256( H(i-1) || S(i) )` where `S(i)` = header bytes ‖ body bytes (exactly as stored, canonical). `H(0)` = SHA-256 of the canonical session manifest.
+The header and footer lines each include their terminating LF. Body lengths are unsigned big-endian u32 values. `record_count` tells the reader exactly how many frames precede the footer; no trailing bytes are allowed. A segment is nonempty, with ascending `seq`, one session ID, and `ts_start_ns`/`ts_end_ns` equal to the minimum/maximum event timestamps in the body. `selection_stats` is an object with nonnegative integer `seen`, `kept`, `dropped_by_policy`, and `promoted_by_context`, plus `by_type` mapping event-type strings to nonnegative integer counts.
+
+Chain: `H(i) = SHA-256( H(i-1) || S(i) )` where `H(i-1)` is the raw 32-byte digest and `S(i)` = header bytes ‖ body bytes (exactly as stored, canonical). `H(0)` = SHA-256 of the canonical session manifest. The `prev_hash`, `segment_hash`, and `body_sha256` text fields use lowercase `sha256:<64 hex>`.
 
 `selection_stats` (per segment): `seen`, `kept`, `dropped_by_policy`, `by_type` counts, `promoted_by_context`. This lets reports separate "dropped on purpose" from "lost".
 
