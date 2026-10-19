@@ -29,6 +29,7 @@ def read_receipts(directory: Path, public_key: Ed25519PublicKey) -> list[Receipt
         raise ValueError("unrecognized receipt file")
     receipts: list[Receipt] = []
     expected_hash = GENESIS_RECEIPT_HASH
+    previous_index = -1
     for seq, path in enumerate(paths):
         if path.name != f"receipt_{seq:08d}.json":
             raise ValueError("receipt sequence gap or reordering")
@@ -42,8 +43,11 @@ def read_receipts(directory: Path, public_key: Ed25519PublicKey) -> list[Receipt
             raise ValueError("noncanonical receipt file")
         if receipt.anchor_seq != seq or receipt.prev_receipt_hash != expected_hash:
             raise ValueError("receipt chain mismatch")
+        if receipt.checkpoint.segment_index <= previous_index:
+            raise ValueError("receipt segment indexes must increase")
         verify_receipt_signature(public_key, receipt)
         expected_hash = receipt_hash(receipt)
+        previous_index = receipt.checkpoint.segment_index
         receipts.append(receipt)
     return receipts
 

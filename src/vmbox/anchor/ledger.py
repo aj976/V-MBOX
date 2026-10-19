@@ -56,6 +56,8 @@ class AnchorLedger:
         with self._lock:
             directory = self.root / "receipts" / session
             previous = read_receipts(directory, self.private_key.public_key())
+            if any(receipt.checkpoint.session_id != session for receipt in previous):
+                raise ValueError("receipt session mismatch")
             for receipt in previous:
                 if receipt.checkpoint == checkpoint:
                     return receipt
