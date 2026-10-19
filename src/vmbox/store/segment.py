@@ -105,9 +105,9 @@ def _digest(raw: bytes) -> str:
     return "sha256:" + sha256(raw).hexdigest()
 
 
-def seal_segment(path: Path, *, index: int, events: list[Event], prev_hash: str,
-                 strategy: str, selection_stats: SelectionStats) -> SegmentFooter:
-    """Write temp, fsync, then rename to a never-overwritten .vseg file."""
+def encode_segment(*, index: int, events: list[Event], prev_hash: str,
+                   strategy: str, selection_stats: SelectionStats) -> tuple[bytes, SegmentFooter]:
+    """Build exact bytes before any write so budget checks can include temp space."""
     if not events:
         raise ValueError("cannot seal empty segment")
     if any(event.session_id != events[0].session_id for event in events):
@@ -128,6 +128,14 @@ def seal_segment(path: Path, *, index: int, events: list[Event], prev_hash: str,
     previous_digest = bytes.fromhex(prev_hash.removeprefix("sha256:"))
     footer = SegmentFooter(_digest(previous_digest + header_bytes + body), _digest(body))
     final_bytes = header_bytes + body + canonical_json(asdict(footer)) + b"\n"
+    return final_bytes, footer
+
+
+def seal_segment(path: Path, *, index: int, events: list[Event], prev_hash: str,
+                 strategy: str, selection_stats: SelectionStats) -> SegmentFooter:
+    """Write temp, fsync, then rename to a never-overwritten .vseg file."""
+    final_bytes, footer = encode_segment(index=index, events=events, prev_hash=prev_hash,
+                                         strategy=strategy, selection_stats=selection_stats)
     temp = path.with_name(path.name + ".tmp")
     if path.exists() or temp.exists():
         raise FileExistsError(path)

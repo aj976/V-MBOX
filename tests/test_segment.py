@@ -70,3 +70,18 @@ def test_segment_torn_footer_never_complete(tmp_path: Path):
                  strategy="fixed", selection_stats=SelectionStats(1, 1, 0, {}, 0))
     path.write_bytes(path.read_bytes()[:-20])
     assert verify_segment(path, genesis_tag()).status == "incomplete"
+
+
+def test_failed_rename_leaves_only_unsealed_temp(tmp_path: Path, monkeypatch):
+    path = tmp_path / "seg_00000000.vseg"
+
+    def fail_rename(source, destination):
+        raise OSError("simulated interruption before rename")
+
+    monkeypatch.setattr("vmbox.store.segment.os.rename", fail_rename)
+    with pytest.raises(OSError, match="simulated interruption"):
+        seal_segment(path, index=0, events=[event(1)], prev_hash=genesis_tag(),
+                     strategy="fixed", selection_stats=SelectionStats(1, 1, 0, {}, 0))
+    assert not path.exists()
+    assert path.with_name(path.name + ".tmp").exists()
+    assert verify_segment(path, genesis_tag()).status == "incomplete"
