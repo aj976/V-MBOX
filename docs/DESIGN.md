@@ -47,11 +47,13 @@ Pipeline order matters: **sequence numbers are assigned in the normalizer before
 
 | Category | Primary | Fallback / notes |
 |---|---|---|
-| Process | ETW `Microsoft-Windows-Kernel-Process` | Sysmon 1 / 5 |
-| Network | ETW `Microsoft-Windows-Kernel-Network` | Sysmon 3 |
-| Memory-related | Sysmon 8 (remote thread), 10 (process access), 7 (image load) | `MEM_PROTECT_CHANGE` only if a source is validated in M1 |
+| Process | Sysmon 1 / 5 observed in M1 | ETW `Microsoft-Windows-Kernel-Process` observed, but the unfiltered Python spike overflowed its queue |
+| Network | Sysmon 3 observed in M1 | ETW `Microsoft-Windows-Kernel-Network` observed with the same unfiltered-ETW loss limit |
+| Memory-related proxies | Sysmon 7 (image load) and 10 (process access) observed in M1 | Sysmon 8 remains enabled but unobserved; `MEM_PROTECT_CHANGE` is excluded until a usable source and real event are validated |
 
 Direct visibility of `VirtualProtect`/RWX transitions generally requires privileged or protected consumers (e.g. the Threat-Intelligence ETW provider) or API hooking. This project does not assume them. If M1 shows no usable source, the memory category is the Sysmon proxy set and every report says "memory-related proxies" explicitly.
+
+M1 VM runs counted 4,408 events at 110.056 events/sec with zero collector queue overflow and 1.873% one-core CPU for Sysmon-only benign noise ([results.json](M1_RESULTS.json), [run record](M1_FINDINGS_SYSMON_ONLY.md)). The unfiltered ETW-only run counted 40,386 events with 20,377 collector queue overflows and 94.637% one-core CPU ([results.json](M1_RESULTS.json), [run record](M1_FINDINGS_ETW_ONLY.md)). Thus the **current unfiltered Python ETW spike is no-go** as a lossless collector at this observed load; Sysmon-only is a provisional Python path, not a completeness claim because Sysmon upstream loss was not measured. The VM lists `Microsoft-Windows-Threat-Intelligence` and a `PROTECTVM` task in provider metadata, but subscription access and an actual protection-change event were not measured. Provider metadata alone does not validate `MEM_PROTECT_CHANGE`. No direct memory-protection visibility is claimed.
 
 All sources implement one `Source` interface, including a `ReplaySource` that reads a recorded raw trace. This is what makes the evaluation deterministic.
 
@@ -178,7 +180,8 @@ Style: plain, high-contrast, no alarm colors for inferences. Red is reserved for
 | D3 | `seq` assigned pre-selection | Post-selection | Makes policy drops distinguishable from loss |
 | D4 | Offline replay for evaluation | Live-only comparison | Same inputs for every strategy; reproducible |
 | D5 | Anchor on separate VM with own key | Same-host service | Approximates the independent recorder without hardware |
-| D6 | Sysmon proxies for memory | Threat-Intelligence ETW | Accessible without protected-process signing |
+| D6 | Sysmon 7/10 are the measured memory-related proxies; Sysmon 8 remains unobserved; omit `MEM_PROTECT_CHANGE` | Use the registered Threat-Intelligence `PROTECTVM` task | M1 VM metadata shows the task exists, but access and a real event were not measured; provider registration is insufficient evidence |
+| D11 | Do not use the current unfiltered Python ETW spike as the collector at measured load | Keep the unfiltered ETW subscription | ETW-only M1 run overflowed its queue 20,377 times at 94.637% one-core CPU; a narrower ETW subscription or another hot path needs separate validation |
 | D7 | Canonical JSON Lines raw trace with a separate exact-byte SHA-256 sidecar | Hash embedded in trace | Keeps the trace stream replayable and makes incomplete writes explicit |
 | D8 | UUIDv5 from session ID and sequence | Random event IDs | Labels remain stable across strategy replays |
 | D9 | Two checksummed journal cursor slots and explicit wrap padding | Scan an unmarked ring | Identifies the live frame window and flags torn or stale bytes after wrap |
