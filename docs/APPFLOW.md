@@ -4,6 +4,8 @@ V-MBOX is a CLI tool plus two long-running processes (recorder, anchor). There i
 
 ## 1. Commands
 
+Current implementation: `vmbox verify --evidence <dir>` checks the local canonical manifest, segment/tombstone chain, and journal CRC. It prints `anchor: not checked`; `--anchor-pubkey` is rejected until M4 receipt verification is implemented. The other commands below remain planned.
+
 | Command | Purpose | Key options |
 |---|---|---|
 | `vmbox record` | Collect, select, persist | `--strategy fixed\|priority\|context`, `--budget 64MB`, `--journal 8MB`, `--out <dir>`, `--anchor host:port`, `--tee-raw <file>` |

@@ -9,6 +9,9 @@ description = "Windows forensic trace recorder research prototype"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.scripts]
+vmbox = "vmbox.cli:main"
+
 [project.optional-dependencies]
 dev = ["pytest==9.1.1", "hypothesis==6.170.2", "ruff==0.17.1", "mypy==2.4.0"]
 windows = ["pywin32==312", "pywintrace==0.2.0", "psutil==7.2.2"]

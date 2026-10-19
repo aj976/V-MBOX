@@ -50,7 +50,7 @@ vmbox/
   docs/
 ```
 
-## Planned CLI
+## CLI (only `verify` local-chain mode implemented; other commands planned)
 
 ```
 vmbox record     # start collection + persistence
