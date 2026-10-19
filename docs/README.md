@@ -17,17 +17,6 @@ A software-only forensic trace recorder for Windows. It collects selected proces
 - Not hardware. The embedded-recorder phase of the original spec is out of scope.
 - Not tamper-proof against a fully compromised host (see `DESIGN.md`, threat model).
 
-## Docs
-
-| File | Purpose |
-|---|---|
-| `PRD.md` | Goals, scope, requirements, research question, success criteria |
-| `APPFLOW.md` | CLI commands and the end-to-end flows (record, recover, investigate, evaluate) |
-| `DESIGN.md` | Architecture, selection strategies, storage and integrity design, threat model |
-| `SCHEMA.md` | Event record, segment, checkpoint, ground-truth and report formats |
-| `TECHSTACK.md` | Technology choices, rationale, environment setup |
-| `RULES.md` | Engineering and honesty rules for everyone (and any AI assistant) working on this repo |
-| `IMPLEMENTATION_PLAN.md` | Milestones, tasks, exit criteria, risks |
 
 ## Planned layout
 
