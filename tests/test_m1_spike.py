@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from vmbox.collect.etw import EtwSource
-from vmbox.collect.sysmon import SYSMON_TYPES, parse_sysmon_xml
+from vmbox.collect.sysmon import SYSMON_TYPES, SysmonSource, parse_sysmon_xml
 
 
 def test_sysmon_config_enables_requested_ids():
@@ -65,3 +65,19 @@ def test_etw_adapter_counts_only_known_provider(monkeypatch):
         "etw_events_lost": 2, "etw_log_buffers_lost": 1,
         "etw_realtime_buffers_lost": 0,
     }
+
+
+def test_sysmon_source_closes_subscription_handle(monkeypatch):
+    closed = []
+
+    class Handle:
+        def Close(self):
+            closed.append("subscription")
+
+    monkeypatch.setitem(sys.modules, "win32api", SimpleNamespace(
+        CloseHandle=lambda signal: closed.append(signal)))
+    source = SysmonSource()
+    source._subscription = Handle()
+    source._signal = "signal"
+    source.stop()
+    assert closed == ["subscription", "signal"]

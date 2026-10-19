@@ -70,7 +70,7 @@ class SysmonSource:
                             xml = win32evtlog.EvtRender(event, win32evtlog.EvtRenderEventXml)
                             sink(parse_sysmon_xml(xml))
                         finally:
-                            win32evtlog.EvtClose(event)
+                            event.Close()
             except Exception as exc:
                 self._error = exc
 
@@ -92,8 +92,7 @@ class SysmonSource:
         if self._thread:
             self._thread.join(timeout=2)
         if self._subscription is not None:
-            import win32evtlog
-            win32evtlog.EvtClose(self._subscription)
+            self._subscription.Close()
         if self._signal is not None:
             import win32api  # type: ignore  # VM dependency
             win32api.CloseHandle(self._signal)
