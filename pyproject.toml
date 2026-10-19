@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vmbox"
+version = "0.1.0"
+description = "Windows forensic trace recorder research prototype"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1", "hypothesis==6.170.2", "ruff==0.17.1", "mypy==2.4.0"]
+windows = ["pywin32==312", "pywintrace==0.2.0", "psutil==7.2.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["windows_vm: requires a Windows lab VM"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".deps"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/vmbox"]
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["vmbox.integrity", "vmbox.integrity.*", "vmbox.store", "vmbox.store.*"]
+strict = true

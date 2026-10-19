@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.venv/
+.deps/
+*.egg-info/
+dist/
+build/
+*.pyc
+M1_FINDINGS_REAL.md

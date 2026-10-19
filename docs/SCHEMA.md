@@ -131,7 +131,7 @@ Receipt (anchor → host, stored by both):
 
 ```json
 {
-  "checkpoint": { },
+  "checkpoint": { "session_id": "uuid", "segment_index": 12, "segment_hash": "sha256:...", "seq_end": 0, "host_ts_ns": 0 },
   "anchor_ts_ns": 0,
   "anchor_seq": 57,
   "prev_receipt_hash": "sha256:...",
@@ -146,19 +146,19 @@ The anchor chains receipts to each other and signs with its own key, which the h
 ```json
 {
   "timeline": [
-    { "ref": "event_id", "ts_ns": 0, "integrity": "anchored|chained|journal_only|unverified|tampered" }
+    { "ref": "event_id", "ts_ns": 0, "integrity": "anchored" }
   ],
   "relations": [
     {
       "relation_id": "r1",
-      "type": "parent_of|spawned_then_connected|remote_thread_into|temporal_proximity",
+      "type": "parent_of",
       "from": "event_id", "to": "event_id",
-      "provenance": "derived|inferred",
-      "basis": "ppid match | same pid within 2.0s | ...",
-      "confidence": "high|medium|low"
+      "provenance": "derived",
+      "basis": "ppid match",
+      "confidence": "medium"
     }
   ],
-  "gaps": [ { "kind": "seq_gap|capture_gap|interruption|tombstone|incomplete_write", "seq_range": [0,0], "ts_range_ns": [0,0] } ],
+  "gaps": [ { "kind": "seq_gap", "seq_range": [0,0], "ts_range_ns": [0,0] } ],
   "limitations": [ "string" ]
 }
 ```

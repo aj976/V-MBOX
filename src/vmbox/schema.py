@@ -1,0 +1,379 @@
+"""Schema version 1 models. docs/SCHEMA.md owns persisted formats."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, fields
+from typing import Any, Literal, TypeVar, get_args, get_origin, get_type_hints
+
+from vmbox.canonical import canonical_json
+
+ModelT = TypeVar("ModelT", bound="SchemaModel")
+
+
+def _valid_type(value: Any, annotation: Any) -> bool:
+    origin = get_origin(annotation)
+    if origin is None:
+        if annotation is Any:
+            return True
+        if isinstance(annotation, type):
+            return type(value) is annotation or (
+                issubclass(annotation, SchemaModel) and isinstance(value, annotation)
+            )
+        return False
+    if origin is Literal:
+        return value in get_args(annotation)
+    if origin in (list, tuple):
+        args = get_args(annotation)
+        return type(value) is origin and all(_valid_type(item, args[0]) for item in value)
+    if origin is dict:
+        key_type, val_type = get_args(annotation)
+        return type(value) is dict and all(
+            _valid_type(k, key_type) and _valid_type(v, val_type) for k, v in value.items()
+        )
+    if origin is type(None):
+        return value is None
+    return any(_valid_type(value, arg) for arg in get_args(annotation))
+
+
+def _decode(value: Any, annotation: Any) -> Any:
+    if isinstance(annotation, type) and issubclass(annotation, SchemaModel):
+        return annotation.from_dict(value)
+    origin = get_origin(annotation)
+    if origin is list and type(value) is list:
+        return [_decode(item, get_args(annotation)[0]) for item in value]
+    if origin is dict and type(value) is dict:
+        return {k: _decode(v, get_args(annotation)[1]) for k, v in value.items()}
+    if origin is not None:
+        for arg in get_args(annotation):
+            if arg is type(None) and value is None:
+                return None
+            if isinstance(arg, type) and issubclass(arg, SchemaModel) and type(value) is dict:
+                return arg.from_dict(value)
+    return value
+
+
+def _encode(value: Any) -> Any:
+    if isinstance(value, SchemaModel):
+        return value.to_dict()
+    if isinstance(value, list):
+        return [_encode(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _encode(item) for key, item in value.items()}
+    return value
+
+
+@dataclass(frozen=True)
+class SchemaModel:
+    def __post_init__(self) -> None:
+        hints = get_type_hints(type(self))
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if not _valid_type(value, hints[field.name]):
+                raise ValueError(f"{type(self).__name__}.{field.name}: invalid type or value")
+
+    @classmethod
+    def from_dict(cls: type[ModelT], data: dict[str, Any]) -> ModelT:
+        if type(data) is not dict:
+            raise ValueError(f"{cls.__name__}: expected object")
+        names = {field.name for field in fields(cls)}
+        if set(data) != names:
+            raise ValueError(
+                f"{cls.__name__}: missing {sorted(names - set(data))}; "
+                f"extra {sorted(set(data) - names)}"
+            )
+        hints = get_type_hints(cls)
+        decoded = {name: _decode(value, hints[name]) for name, value in data.items()}
+        return cls(**decoded)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {field.name: _encode(getattr(self, field.name)) for field in fields(self)}
+
+    def to_json(self) -> bytes:
+        return canonical_json(self.to_dict())
+
+
+@dataclass(frozen=True)
+class ProcessInfo(SchemaModel):
+    image: str
+    cmdline_hash: str
+    cmdline: str | None
+
+
+@dataclass(frozen=True)
+class CaptureInfo(SchemaModel):
+    source: str
+    status: Literal["ok", "partial", "source_error", "dropped_upstream"]
+    collector_version: str
+
+
+EVENT_CATEGORIES = {
+    "PROC_START": "process", "PROC_EXIT": "process",
+    "NET_CONNECT": "network", "NET_CLOSE": "network",
+    "MEM_REMOTE_THREAD": "memory", "MEM_PROCESS_ACCESS": "memory",
+    "MEM_IMAGE_LOAD": "memory", "MEM_PROTECT_CHANGE": "memory",
+    "CAPTURE_GAP": "meta", "COLLECTOR_START": "meta", "COLLECTOR_STOP": "meta",
+}
+
+
+@dataclass(frozen=True)
+class Event(SchemaModel):
+    schema_version: int
+    event_id: str
+    session_id: str
+    boot_id: str
+    seq: int
+    ts_ns: int
+    ts_source: Literal["etw_qpc", "sysmon_utc", "wallclock", "replay"]
+    event_type: str
+    category: str
+    pid: int
+    ppid: int
+    process: ProcessInfo
+    data: dict[str, Any]
+    provenance: Literal["observed"]
+    capture: CaptureInfo
+    priority: int | float | None
+    tags: list[str]
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.schema_version != 1 or self.seq < 0 or self.ts_ns < 0:
+            raise ValueError("invalid version, seq or timestamp")
+        if self.pid < 0 or self.ppid < 0 or EVENT_CATEGORIES.get(self.event_type) != self.category:
+            raise ValueError("invalid PID or event category")
+
+
+@dataclass(frozen=True)
+class AnchorInfo(SchemaModel):
+    endpoint: str
+    pubkey_fingerprint: str
+
+
+@dataclass(frozen=True)
+class SessionManifest(SchemaModel):
+    schema_version: int
+    session_id: str
+    boot_id: str
+    host: str
+    start_ts_ns: int
+    collector_version: str
+    config_hash: str
+    strategy: str
+    budget_bytes: int
+    journal_bytes: int
+    anchor: AnchorInfo
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.schema_version != 1 or self.start_ts_ns < 0:
+            raise ValueError("invalid manifest version or timestamp")
+        if not 0 <= self.journal_bytes <= self.budget_bytes:
+            raise ValueError("journal exceeds budget")
+
+
+@dataclass(frozen=True)
+class Checkpoint(SchemaModel):
+    session_id: str
+    segment_index: int
+    segment_hash: str
+    seq_end: int
+    host_ts_ns: int
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if min(self.segment_index, self.seq_end, self.host_ts_ns) < 0:
+            raise ValueError("negative checkpoint value")
+
+
+@dataclass(frozen=True)
+class Receipt(SchemaModel):
+    checkpoint: Checkpoint
+    anchor_ts_ns: int
+    anchor_seq: int
+    prev_receipt_hash: str
+    signature: str
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.anchor_ts_ns < 0 or self.anchor_seq < 0:
+            raise ValueError("negative receipt value")
+
+
+@dataclass(frozen=True)
+class Tombstone(SchemaModel):
+    index: int
+    seq_start: int
+    seq_end: int
+    record_count: int
+    ts_start_ns: int
+    ts_end_ns: int
+    prev_hash: str
+    segment_hash: str
+    evicted_reason: str
+    evicted_ts_ns: int
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if min(self.index, self.seq_start, self.seq_end, self.record_count,
+               self.ts_start_ns, self.ts_end_ns, self.evicted_ts_ns) < 0:
+            raise ValueError("negative tombstone value")
+
+
+@dataclass(frozen=True)
+class TimelineEntry(SchemaModel):
+    ref: str
+    ts_ns: int
+    integrity: Literal["anchored", "chained", "journal_only", "unverified", "tampered"]
+
+
+@dataclass(frozen=True)
+class Relation(SchemaModel):
+    relation_id: str
+    type: Literal["parent_of", "spawned_then_connected", "remote_thread_into", "temporal_proximity"]
+    from_: str
+    to: str
+    provenance: Literal["derived", "inferred"]
+    basis: str
+    confidence: Literal["high", "medium", "low"]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Relation:
+        if "from" not in data:
+            raise ValueError("Relation: missing from")
+        renamed = {"from_": data["from"], **{k: v for k, v in data.items() if k != "from"}}
+        return super().from_dict(renamed)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"from" if k == "from_" else k: v for k, v in super().to_dict().items()}
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.type == "temporal_proximity" and (
+            self.provenance != "inferred" or self.confidence == "high"
+        ):
+            raise ValueError("temporal proximity must be inferred and not high confidence")
+
+
+@dataclass(frozen=True)
+class Gap(SchemaModel):
+    kind: Literal["seq_gap", "capture_gap", "interruption", "tombstone", "incomplete_write"]
+    seq_range: list[int]
+    ts_range_ns: list[int]
+
+
+@dataclass(frozen=True)
+class Reconstruction(SchemaModel):
+    timeline: list[TimelineEntry]
+    relations: list[Relation]
+    gaps: list[Gap]
+    limitations: list[str]
+
+
+@dataclass(frozen=True)
+class StepMatch(SchemaModel):
+    event_type: str
+    image_regex: str
+    ts_window_ns: list[int]
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if len(self.ts_window_ns) != 2 or self.ts_window_ns[0] > self.ts_window_ns[1]:
+            raise ValueError("invalid time window")
+
+
+@dataclass(frozen=True)
+class LabelStep(SchemaModel):
+    step_id: str
+    description: str
+    match: StepMatch
+    relevance: Literal["attack", "benign"]
+
+
+@dataclass(frozen=True)
+class GroundTruthLabel(SchemaModel):
+    scenario_id: str
+    run_id: str
+    seed: int
+    steps: list[LabelStep]
+    benign_workload: str
+
+
+@dataclass(frozen=True)
+class ReconstructionAccuracy(SchemaModel):
+    order: float | None
+    relations_precision: float | None
+    relations_recall: float | None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.order is not None and not -1 <= self.order <= 1:
+            raise ValueError("order agreement out of range")
+        for value in (self.relations_precision, self.relations_recall):
+            if value is not None and not 0 <= value <= 1:
+                raise ValueError("relation metric out of range")
+
+
+@dataclass(frozen=True)
+class PersistenceLatency(SchemaModel):
+    p50: float | None
+    p95: float | None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if any(value is not None and value < 0 for value in (self.p50, self.p95)):
+            raise ValueError("negative latency")
+
+
+@dataclass(frozen=True)
+class EvaluationMetrics(SchemaModel):
+    evidence_coverage: float | None
+    collection_coverage: float | None
+    reconstruction_accuracy: ReconstructionAccuracy
+    storage_efficiency: float | None
+    event_loss_rate: float | None
+    persistence_latency_ms: PersistenceLatency
+    crash_recovery_rate: float | None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        rates = (self.evidence_coverage, self.collection_coverage,
+                 self.event_loss_rate, self.crash_recovery_rate)
+        if any(value is not None and not 0 <= value <= 1 for value in rates):
+            raise ValueError("rate out of range")
+        if self.storage_efficiency is not None and self.storage_efficiency < 0:
+            raise ValueError("negative storage efficiency")
+
+
+@dataclass(frozen=True)
+class ToolVersions(SchemaModel):
+    python: str
+    vmbox: str
+    lockfile_hash: str
+    windows_build: str
+    sysmon_version: str
+    etw_pywintrace: str | None
+
+
+@dataclass(frozen=True)
+class EvaluationResult(SchemaModel):
+    run_id: str
+    scenario_id: str
+    seed: int
+    strategy: str
+    budget_bytes: int
+    budget_fraction_of_full: float | None
+    trace_hash: str
+    label_hash: str
+    config_hash: str
+    git_commit: str
+    git_dirty: bool
+    strategy_rules_version: str
+    tool_versions: ToolVersions
+    metrics: EvaluationMetrics
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.seed < 0 or self.budget_bytes < 0:
+            raise ValueError("negative seed or budget")
+        if self.budget_fraction_of_full is not None and not 0 <= self.budget_fraction_of_full <= 1:
+            raise ValueError("budget fraction out of range")
