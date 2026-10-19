@@ -125,3 +125,12 @@ def test_event_id_must_match_session_and_sequence():
     data["event_id"] = "00000000-0000-5000-8000-000000000000"
     with pytest.raises(ValueError):
         Event.from_dict(data)
+
+
+def test_receipt_rejects_noncanonical_signature_encoding():
+    receipt = examples()[4]
+    for signature in ("ed25519:" + "A" * 128, "ed25519:" + "0" * 127,
+                      "ed25519:" + "g" * 128):
+        invalid = {**receipt, "signature": signature}
+        with pytest.raises(ValueError):
+            Receipt.from_dict(invalid)

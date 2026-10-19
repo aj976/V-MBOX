@@ -145,25 +145,29 @@ When the budget forces eviction, a sealed segment body is deleted and replaced b
 
 ## 6. Checkpoint and anchor receipt
 
-Checkpoint (host → anchor):
+Checkpoint (host → anchor), format template:
 
 ```json
 { "session_id": "uuid", "segment_index": 12, "segment_hash": "sha256:...", "seq_end": 0, "host_ts_ns": 0 }
 ```
 
-Receipt (anchor → host, stored by both):
+Receipt (anchor → host, stored by both). Format template only: the zero signature below is not a real signature.
 
 ```json
 {
   "checkpoint": { "session_id": "uuid", "segment_index": 12, "segment_hash": "sha256:...", "seq_end": 0, "host_ts_ns": 0 },
   "anchor_ts_ns": 0,
-  "anchor_seq": 57,
-  "prev_receipt_hash": "sha256:...",
-  "signature": "ed25519:..."
+  "anchor_seq": 0,
+  "prev_receipt_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "signature": "ed25519:00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 }
 ```
 
-The anchor chains receipts to each other and signs with its own key, which the host never holds. Verification uses only the anchor public key.
+The Ed25519 message is exactly `b"vmbox-receipt-v1\n" + canonical_json(receipt without signature)`, with no trailing LF. `signature` is `ed25519:` plus exactly 128 lowercase hexadecimal characters encoding the 64 signature bytes; uppercase and noncanonical encodings are invalid. `anchor_seq` starts at 0 and increases by one **per session_id**. The first `prev_receipt_hash` is `sha256:` plus 64 zeros. Each later `prev_receipt_hash` is SHA-256 of the full canonical signed previous receipt (including its signature), without a trailing LF. The host checks signatures with the anchor public key only. The manifest's `anchor.pubkey_fingerprint` is SHA-256 of the raw 32-byte Ed25519 public key.
+
+Receipts are write-once canonical JSON files without a trailing LF, named `receipts/<session_id>/receipt_<anchor_seq:08d>.json` on both host and anchor. The anchor persists and fsyncs a receipt before returning it. Resubmitting an identical checkpoint returns exactly the same receipt and creates no new file. A new checkpoint must have `segment_index` greater than the last accepted one. A conflicting hash at the same index is rejected and recorded in a write-once anchor-side `equivocations/<session_id>/conflict_<segment_index:08d>_<rejected_checkpoint_sha256>.json` file. That file contains canonical JSON (no LF) with exactly `accepted_checkpoint`, `rejected_checkpoint`, and `anchor_ts_ns`; the filename digest covers the rejected checkpoint's canonical JSON bytes. Such a record documents a conflict, not intent or attribution.
+
+An optional anchor-side export is a copy of the anchor's `receipts/` tree. The verifier checks both the host receipts and export, including signatures, sequence, previous-receipt hashes, and each referenced segment hash against the host's segment chain. If the host log is a strict prefix of the anchor export, it reports `host receipts end at anchor_seq N, anchor has M` and marks the missing host tail incomplete. A mismatched shared prefix fails verification. Without an anchor export, the signed host range is `unconfirmed against anchor state`: host-side receipts alone cannot detect a truncated tail. Second-VM transport and power-loss durability are **unverified until run on the second VM**.
 
 ## 7. Reconstruction output
 

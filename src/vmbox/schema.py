@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, fields
 from hashlib import sha256
 from typing import Any, Literal, TypeVar, get_args, get_origin, get_type_hints
@@ -215,6 +216,10 @@ class Receipt(SchemaModel):
         super().__post_init__()
         if self.anchor_ts_ns < 0 or self.anchor_seq < 0:
             raise ValueError("negative receipt value")
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", self.prev_receipt_hash) is None:
+            raise ValueError("invalid previous receipt hash")
+        if re.fullmatch(r"ed25519:[0-9a-f]{128}", self.signature) is None:
+            raise ValueError("invalid Ed25519 signature encoding")
 
 
 @dataclass(frozen=True)
