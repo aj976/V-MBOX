@@ -2,7 +2,7 @@
 
 A software-only forensic trace recorder for Windows. It collects selected process, memory-related, and network events, keeps the most investigation-relevant ones under a fixed storage budget, protects them with a tamper-evident hash chain, and rebuilds a qualified timeline after a crash or unexpected shutdown.
 
-**Status:** planning (docs only, no code yet).
+**Status:** M0 foundation implemented locally. M1 telemetry spike scripts are ready but unverified until run on a Windows VM. M2 and later are planned.
 
 ## What it is
 
