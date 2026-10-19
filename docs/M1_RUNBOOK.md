@@ -1,6 +1,6 @@
 # M1 Windows VM runbook
 
-This spike is **unverified until run on Windows VM**. Use your own isolated lab VM and a clean snapshot. No M2 recorder, normalizer, or persistence is included. The workload uses only local processes and loopback traffic; it does not create a remote thread or modify another process's memory. Therefore absence of Sysmon 8 is expected from this workload, not evidence that the source is unavailable.
+This spike is **unverified until run on Windows VM**. Use your own isolated lab VM and a clean snapshot. The M1 command below measures telemetry only; it does not invoke the separate M2 trace writer or normalizer. The workload uses only local processes and loopback traffic; it does not create a remote thread or modify another process's memory. Therefore absence of Sysmon 8 is expected from this workload, not evidence that the source is unavailable.
 
 Open PowerShell as Administrator in the repo root. Install Python 3.11+ and Sysmon first. The commands below assume `python`, `sysmon64`, and `logman` are on `PATH`.
 
