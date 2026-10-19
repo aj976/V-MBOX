@@ -80,6 +80,7 @@ ETW task-name mapping and QPC timestamp conversion are also **unverified until r
 ## 2. Session manifest
 
 Written at session start, hashed into the chain genesis.
+The write-once file `manifest.json` contains exactly `canonical_json(manifest)` with no trailing newline; these exact bytes are the `H(0)` input.
 
 ```json
 {
