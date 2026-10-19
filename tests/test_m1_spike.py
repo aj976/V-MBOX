@@ -21,14 +21,15 @@ def test_sysmon_config_enables_requested_ids():
     assert set(SYSMON_TYPES) == {1, 3, 5, 7, 8, 10}
 
 
-def test_sysmon_xml_parses_metadata_without_command_line():
+def test_sysmon_xml_passes_command_line_to_trace_writer():
     xml = ("<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'>"
            "<System><EventID>1</EventID><EventRecordID>123</EventRecordID></System>"
            "<EventData><Data Name='Image'>C:\\test.exe</Data>"
            "<Data Name='CommandLine'>secret</Data></EventData></Event>")
     event = parse_sysmon_xml(xml)
     assert event.event_type == "PROC_START"
-    assert event.payload == {"event_id": 1, "record_id": 123, "Image": "C:\\test.exe"}
+    assert event.payload == {"event_id": 1, "record_id": 123, "Image": "C:\\test.exe",
+                             "CommandLine": "secret"}
 
 
 def test_sysmon_xml_rejects_missing_event_id():

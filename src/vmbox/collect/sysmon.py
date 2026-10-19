@@ -32,9 +32,8 @@ def parse_sysmon_xml(xml: str) -> RawEvent:
     for item in root.findall("./e:EventData/e:Data", namespace):
         name = item.get("Name")
         if name:
-            # The spike counts metadata only; no command lines are persisted.
-            if name == "CommandLine":
-                continue
+            # Passed transiently to the trace writer, which hashes before
+            # persistence unless local-only raw-command-line opt-in is set.
             data[name] = item.text
     return RawEvent("sysmon", SYSMON_TYPES[event_id], data)
 

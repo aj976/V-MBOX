@@ -10,3 +10,5 @@ dist/
 build/
 *.pyc
 M1_FINDINGS_REAL.md
+*.local.jsonl
+*.local.jsonl.sha256
