@@ -17,6 +17,8 @@ sysmon64 -i .\docs\sysmon.xml
 
 If Sysmon is already installed, use `sysmon64 -c .\docs\sysmon.xml` instead of `-i`. Confirm the VM's Sysmon schema accepts this config and inspect `sysmon64 -c`. Sysmon IDs 4, 16, and error 255 are unfilterable, so "only six IDs" applies to configurable event classes. [Microsoft's Sysmon reference](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon) documents the config tags and `-s` command.
 
+Each selected class uses an empty `exclude` filter, which includes all events of that class. Image-load and process-access volume may be high; record the rate before narrowing the M2 collection policy.
+
 Discover provider GUIDs on **this VM**; do not copy guessed GUIDs from another machine:
 
 ```powershell

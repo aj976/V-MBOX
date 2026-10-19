@@ -17,6 +17,7 @@ def test_sysmon_config_enables_requested_ids():
         "ProcessCreate", "NetworkConnect", "ProcessTerminate", "ImageLoad",
         "CreateRemoteThread", "ProcessAccess",
     }
+    assert all(child.get("onmatch") == "exclude" for child in root.find("EventFiltering"))
     assert set(SYSMON_TYPES) == {1, 3, 5, 7, 8, 10}
 
 
