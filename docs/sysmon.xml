@@ -1,0 +1,12 @@
+<!-- M1 spike config. Validate with sysmon64 -s and -c on the Windows VM. -->
+<Sysmon schemaversion="4.82">
+  <DnsLookup>false</DnsLookup>
+  <EventFiltering>
+    <ProcessCreate onmatch="include" />
+    <NetworkConnect onmatch="include" />
+    <ProcessTerminate onmatch="include" />
+    <ImageLoad onmatch="include" />
+    <CreateRemoteThread onmatch="include" />
+    <ProcessAccess onmatch="include" />
+  </EventFiltering>
+</Sysmon>
