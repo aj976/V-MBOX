@@ -1,6 +1,6 @@
 # M1 findings — spike 1, user-reported Windows VM output
 
-This is a record of the terminal output supplied by the VM operator, not an independently reproduced run. The two benign workload outputs (118 and 113 iterations) were supplied together; which one overlapped this spike is not yet established. No final M1 event-set or collector decision is made here.
+This is a record of the terminal output supplied by the VM operator, not an independently reproduced run. Measurements are transcribed in [M1_RESULTS.json](M1_RESULTS.json) under `combined_benign`. The two benign workload outputs (118 and 113 iterations) were supplied together; which one overlapped this spike is not yet established. No final M1 event-set or collector decision is made here.
 
 ## Run identity
 

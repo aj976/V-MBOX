@@ -1,6 +1,6 @@
 # M1 findings — spike 2, user-reported Windows VM output
 
-This records the VM operator's pasted spike output; it was not independently reproduced here. The operator confirmed that the injection-like simulation ran concurrently in terminal B and produced no output, which is expected for that script. The script exit code and exact overlap timestamps were not recorded. No final event-set decision is made from this output alone.
+This records the VM operator's pasted spike output; it was not independently reproduced here. Measurements are transcribed in [M1_RESULTS.json](M1_RESULTS.json) under `combined_simulation`. The operator confirmed that the injection-like simulation ran concurrently in terminal B and produced no output, which is expected for that script. The script exit code and exact overlap timestamps were not recorded. No final event-set decision is made from this output alone.
 
 ## Run identity
 

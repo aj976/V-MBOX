@@ -1,6 +1,6 @@
 # M1 findings — ETW-only benign noise, user-reported Windows VM output
 
-This records terminal output supplied by the VM operator. The benign workload ran concurrently and completed 112 process/loopback iterations. It was not independently reproduced here.
+This records terminal output supplied by the VM operator. Measurements are transcribed in [M1_RESULTS.json](M1_RESULTS.json) under `etw_only_benign`. The benign workload ran concurrently and completed 112 process/loopback iterations. It was not independently reproduced here.
 
 ## Run identity
 
