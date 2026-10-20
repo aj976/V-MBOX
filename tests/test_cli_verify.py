@@ -34,7 +34,8 @@ def test_cli_verify_reports_local_scope_and_incomplete(tmp_path: Path, capsys):
 def test_offline_verify_cannot_claim_anchor(tmp_path: Path, capsys):
     write_manifest(tmp_path / "manifest.json", replace(manifest(), mode="offline_eval"))
     create_journal(tmp_path / "journal.bin", 2048)
-    assert main(["verify", "--evidence", str(tmp_path)]) == 0
+    assert main(["verify", "--evidence", str(tmp_path),
+                 "--anchor-pubkey", str(tmp_path / "unused.pub")]) == 0
     output = capsys.readouterr().out
     assert "offline evaluation session, not forensic evidence" in output
     assert "integrity level: chained" in output
