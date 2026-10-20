@@ -146,6 +146,12 @@ M6 exit review remains pending that audit and the recorded run artifacts.
 
 ## M7 — Recovery, reconstruction, report (L)
 
+Recovery, timeline, and deterministic JSON/HTML reports are implemented for
+existing evidence. Forced-kill and power-off tests are **unverified until run on
+Windows VM**. Relation precision/recall remains **not measured** because frozen
+labels currently identify events, not a complete truth set of relations; adding
+one requires an explicit SCHEMA.md change before a metric can be reported.
+
 **Tasks**
 - `recover`: sessions, journal validation, segment/chain/receipt checks, gap classification
 - Reconstruction: timeline by `seq`, derived relations (PID-reuse safe), inferred relations with confidence caps
