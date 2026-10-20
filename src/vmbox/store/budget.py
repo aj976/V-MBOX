@@ -1,5 +1,6 @@
 """Budgeted segment admission and safe eviction; no silent overrun."""
 
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
@@ -23,9 +24,11 @@ def retained_bytes(directory: Path) -> int:
 
 
 class BudgetedSegmentStore:
-    def __init__(self, directory: Path, manifest: SessionManifest) -> None:
+    def __init__(self, directory: Path, manifest: SessionManifest,
+                 eviction_score: Callable[[tuple[Event, ...]], float] | None = None) -> None:
         self.directory = directory
         self.manifest = manifest
+        self.eviction_score = eviction_score
         if not (directory / "journal.bin").is_file():
             raise ValueError("budget requires an initialized journal")
         if retained_bytes(directory) > manifest.budget_bytes:
@@ -37,10 +40,24 @@ class BudgetedSegmentStore:
             raise ValueError(f"cannot write to {chain.status} evidence: {chain.reason}")
         return chain
 
-    def _evict_oldest(self, chain: ChainVerification, evicted_ts_ns: int) -> None:
-        candidate = next((entry for entry in chain.entries if entry.kind == "segment"), None)
-        if candidate is None:
+    def _evict_candidate(self, chain: ChainVerification, evicted_ts_ns: int) -> None:
+        candidates = [entry for entry in chain.entries if entry.kind == "segment"]
+        if not candidates:
             raise BudgetExhausted("budget contains no segment eligible for eviction")
+        if self.eviction_score is None:
+            candidate = candidates[0]
+        else:
+            scored: list[tuple[float, int]] = []
+            for entry in candidates:
+                previous = ("sha256:" + manifest_genesis(self.manifest).hex()
+                            if entry.index == 0 else chain.entries[entry.index - 1].segment_hash)
+                path = self.directory / f"seg_{entry.index:08d}.vseg"
+                verified = verify_segment(path, previous)
+                if verified.status != "ok":
+                    raise ValueError("eviction candidate failed verification")
+                scored.append((self.eviction_score(tuple(verified.events)), entry.index))
+            candidate_index = min(scored)[1]
+            candidate = chain.entries[candidate_index]
         index = candidate.index
         previous = ("sha256:" + manifest_genesis(self.manifest).hex() if index == 0
                     else chain.entries[index - 1].segment_hash)
@@ -64,7 +81,7 @@ class BudgetedSegmentStore:
         if len(raw) + (self.directory / "journal.bin").stat().st_size > self.manifest.budget_bytes:
             raise BudgetExhausted("segment cannot fit even without retained segments")
         while retained_bytes(self.directory) + len(raw) > self.manifest.budget_bytes:
-            self._evict_oldest(chain, evicted_ts_ns)
+            self._evict_candidate(chain, evicted_ts_ns)
             chain = self._verified_chain()
         path = self.directory / f"seg_{index:08d}.vseg"
         actual = seal_segment(path, index=index, events=events, prev_hash=chain.last_hash,

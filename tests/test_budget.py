@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 from uuid import UUID, uuid5
 
+from vmbox.eval.policies import PolicyStrategy
 from vmbox.integrity.chain import verify_chain
 from vmbox.schema import Event, SessionManifest
 from vmbox.store.budget import BudgetedSegmentStore, BudgetExhausted, retained_bytes
@@ -61,3 +62,28 @@ def test_retained_bytes_same_for_live_and_offline_and_excludes_receipts(tmp_path
         (root / "receipts" / "receipt.json").write_bytes(b"excluded")
         values.append(retained_bytes(root))
     assert values[0] == values[1] == live.journal_bytes + 18 + 20
+
+
+def test_priority_eviction_preserves_higher_mean_priority(tmp_path: Path):
+    data = examples()[1]
+    data.update(session_id=event(0).session_id, journal_bytes=1024, budget_bytes=4000)
+    manifest = SessionManifest.from_dict(data)
+    create_journal(tmp_path / "journal.bin", manifest.journal_bytes)
+    high = replace(event(0), event_type="MEM_REMOTE_THREAD", category="memory")
+    low = [replace(event(seq), event_type="NET_CLOSE", category="network")
+           for seq in range(1, 8)]
+    store = BudgetedSegmentStore(tmp_path, manifest,
+                                 eviction_score=PolicyStrategy("priority")
+                                 .eviction_scorer((high, *low)))
+    for item in (high, *low):
+        try:
+            store.seal([item], "priority", SelectionStats(1, 1, 0, {}, 0),
+                       evicted_ts_ns=item.ts_ns)
+        except BudgetExhausted:
+            break
+        if any(tmp_path.glob("*.tomb")):
+            break
+    assert (tmp_path / "seg_00000000.vseg").exists()
+    assert any(tmp_path.glob("*.tomb"))
+    assert verify_chain(tmp_path, manifest).status == "ok"
+    assert retained_bytes(tmp_path) <= manifest.budget_bytes
