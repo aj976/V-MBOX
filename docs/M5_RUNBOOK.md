@@ -36,3 +36,14 @@ python .\scripts\m5_labels.py freeze --trace .\runs\family1_trace.jsonl --draft 
 ```
 
 `freeze` replays the trace again, requires all ambiguous matches to be resolved, and writes `labels.json` once. The printed SHA-256 covers the canonical labels including reviewer identity and timestamp. A changed window or review after freeze requires a new labels version. Zero-candidate attack steps are collection misses; a missing or ambiguous marker makes the run unlabeled. The manually reviewed label set and any future result must remain tied to the exact trace hash and run provenance.
+
+After freezing, run the unbounded reference in a fresh output directory. Read the actual Sysmon executable version from the installed binary. If the executable has a different name or location, change the first command accordingly. The package snapshot is taken from the same environment as this run; do not reuse one from another VM.
+
+```powershell
+$sysmonVersion = (Get-Item (Get-Command sysmon64.exe).Source).VersionInfo.ProductVersion
+python -m pip freeze --all | Out-File -Encoding utf8 .\runs\requirements-lock.txt
+python .\scripts\m5_eval.py --trace .\runs\family1_trace.jsonl --labels .\runs\family1_labels\labels.json --out .\runs\family1_unbounded --journal-bytes 8388608 --lockfile .\runs\requirements-lock.txt --sysmon-version $sysmonVersion
+python -m vmbox.cli verify --evidence .\runs\family1_unbounded
+```
+
+The harness uses the actual journal and sealed-segment encoding, then measures `journal.bin` plus sealed segments and tombstones. It excludes receipts. The result has no experimental budget; unmeasured latency, loss, crash, and reconstruction metrics remain `null`. The manifest's allocation equals the exact serialized retained size and is used only to satisfy the session storage format. This offline result is `chained` at best and is not forensic evidence. VM behavior and live capture are unverified until the scenario is run on the Windows VM.
