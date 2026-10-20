@@ -5,6 +5,11 @@ new write-once evidence; choose fresh output names for every attempt. Keep the
 existing M5/M6 trace, frozen labels, and results unchanged. Only lab VMs that
 you own may be used. Never place `private.pem` on the monitored VM.
 
+Before changing either VM, the laptop can run `scripts/lab_vm_preflight.ps1`
+from Windows PowerShell. It prompts for credentials locally, reads each VM's
+identity, repository revision, Python, and Sysmon version, then closes both
+remote sessions. It does not save passwords or create evidence.
+
 On the **anchor VM**, clone the repository and install the project as in
 `README.md`. Create keys once and start the listener on the IP of its isolated
 VM network adapter (substitute the real address):
