@@ -1,5 +1,6 @@
 """Frozen M6 offline selection rules. No labels or storage access."""
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from ipaddress import ip_address
 
@@ -9,7 +10,7 @@ from vmbox.schema import Event
 from vmbox.store.segment import SelectionStats
 
 # Rule changes require a new experiment version; these values are not learned from labels.
-RULES_VERSION = "m6-general-v1"
+RULES_VERSION = "m6-general-v2"
 FIXED_TYPES = frozenset({"PROC_START", "PROC_EXIT", "NET_CONNECT", "MEM_REMOTE_THREAD",
                          "MEM_PROCESS_ACCESS", "CAPTURE_GAP"})
 BASE_WEIGHT = {"CAPTURE_GAP": 100, "MEM_REMOTE_THREAD": 80,
@@ -65,29 +66,54 @@ def _base_priority(event: Event) -> int:
     return BASE_WEIGHT.get(event.event_type, 0) + (15 if _is_external(event) else 0)
 
 
+def _target_pid(event: Event) -> int | None:
+    value = event.data.get("TargetProcessId", event.data.get("target_pid"))
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        pid = int(value)
+    except ValueError:
+        return None
+    return pid if pid >= 0 else None
+
+
 def _promoted(events: tuple[Event, ...]) -> frozenset[str]:
     """Promote observed PID context after temporal correlations, without intent claims."""
     memory: dict[int, Event] = {}
+    target_activity: dict[int, Event] = {}
     flagged: dict[int, int] = {}
-    triggers: list[tuple[int, int]] = []
+    triggers: list[tuple[frozenset[int], int]] = []
     for event in events:
         if event.pid is None:
             continue
         if event.event_type in {"MEM_PROCESS_ACCESS", "MEM_REMOTE_THREAD"}:
             memory[event.pid] = event
-        elif event.event_type == "NET_CONNECT" and event.pid in memory:
+            target = _target_pid(event)
+            if target is not None and target != event.pid:
+                target_activity[target] = event
+        if event.event_type == "NET_CONNECT" and event.pid in memory:
             prior = memory[event.pid]
             if 0 <= event.ts_ns - prior.ts_ns <= WINDOW_NS:
-                triggers.append((event.pid, event.ts_ns))
+                triggers.append((frozenset({event.pid}), event.ts_ns))
                 flagged[event.pid] = event.ts_ns
-        elif event.event_type == "PROC_START" and event.ppid in flagged:
+        if event.pid in target_activity and event is not target_activity[event.pid]:
+            prior = target_activity[event.pid]
+            if 0 <= event.ts_ns - prior.ts_ns <= WINDOW_NS:
+                involved = {event.pid}
+                if prior.pid is not None:
+                    involved.add(prior.pid)
+                    flagged[prior.pid] = event.ts_ns
+                triggers.append((frozenset(involved), event.ts_ns))
+                flagged[event.pid] = event.ts_ns
+                del target_activity[event.pid]
+        if event.event_type == "PROC_START" and event.ppid in flagged:
             when = flagged[event.ppid]
             if 0 <= event.ts_ns - when <= WINDOW_NS:
-                triggers.append((event.pid, event.ts_ns))
+                triggers.append((frozenset({event.pid, event.ppid}), event.ts_ns))
                 flagged[event.pid] = event.ts_ns
     return frozenset(event.event_id for event in events if event.pid is not None
-                     and any(event.pid == pid and abs(event.ts_ns - when) <= WINDOW_NS
-                             for pid, when in triggers))
+                     and any(event.pid in pids and abs(event.ts_ns - when) <= WINDOW_NS
+                             for pids, when in triggers))
 
 
 @dataclass(frozen=True)
@@ -101,6 +127,20 @@ class PolicyStrategy:
     @property
     def rules_version(self) -> str:
         return RULES_VERSION
+
+    def eviction_scorer(self, source: tuple[Event, ...]) -> Callable[[tuple[Event, ...]], float]:
+        """Lower mean-value segments evict first; promoted context gets protection."""
+        promoted = _promoted(source) if self.name == "context_aware" else frozenset()
+
+        def score(segment: tuple[Event, ...]) -> float:
+            if not segment:
+                raise ValueError("cannot score an empty segment")
+            if self.name in {"fixed", "fifo_ring"}:
+                return 0.0
+            return sum(_base_priority(event) + (1000 if event.event_id in promoted else 0)
+                       for event in segment) / len(segment)
+
+        return score
 
     def select(self, events: tuple[Event, ...], sealed_bytes_budget: int | None,
                ) -> SelectionOutcome:

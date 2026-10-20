@@ -31,7 +31,7 @@ def test_budgeted_strategies_share_four_total_budgets(tmp_path: Path) -> None:
             )
             assert result.bytes_retained is not None
             assert result.bytes_retained <= budget
-            assert result.strategy_rules_version == "m6-general-v1"
+            assert result.strategy_rules_version == "m6-general-v2"
 
 
 def test_fifo_keeps_latest_event_when_one_fits(tmp_path: Path) -> None:
@@ -70,3 +70,19 @@ def test_context_promotes_temporally_related_pid(tmp_path: Path) -> None:
     network = replace(events[2], event_type="NET_CONNECT", category="network")
     selected = PolicyStrategy("context_aware").select((events[0], memory, network), 10000)
     assert selected.stats.promoted_by_context == 2
+
+
+def test_target_activity_and_spawned_child_promote_lineage(tmp_path: Path) -> None:
+    trace, _ = _inputs(tmp_path)
+    header, records = read_trace(trace)
+    normalizer = Normalizer(header)
+    original = tuple(normalizer.normalize(record) for record in records)
+    access = replace(original[0], event_type="MEM_PROCESS_ACCESS", category="memory",
+                     data={"TargetProcessId": "11"}, pid=10)
+    activity = replace(original[1], event_type="PROC_EXIT", pid=11, ppid=10)
+    child = replace(original[2], event_type="PROC_START", pid=12, ppid=11)
+    selected = PolicyStrategy("context_aware").select((access, activity, child), 10000)
+    assert selected.stats.promoted_by_context == 3
+    score = PolicyStrategy("context_aware").eviction_scorer((access, activity, child))
+    assert score((activity,)) > PolicyStrategy("priority").eviction_scorer(
+        (access, activity, child))((activity,))
