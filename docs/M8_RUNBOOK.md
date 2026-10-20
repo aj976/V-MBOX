@@ -41,3 +41,23 @@ development trace as held-out. A held-out aggregate is prepared separately,
 using an explicit `held_out` role, so tuning and held-out traces are not pooled.
 Live overhead, persistence latency, crash-recovery rate, and any CI based on
 fewer than the configured independent runs remain **not measured**.
+
+For each **new independent trace** with frozen labels, `m8_matrix.py` runs the
+unbounded reference first, then all four strategies at the same supplied
+budgets. It creates a write-once output folder, one log per attempted replay,
+and `attempts.json` with explicit failed-run records. A failed reference stops
+the matrix after recording that failed attempt; do not reuse its output folder.
+A failed budgeted
+run is retained in the attempt inventory and prevents a complete paired
+aggregate until it is investigated and rerun as a new attempt.
+
+```powershell
+$sysmonVersion = (Get-Item (Get-Command sysmon64.exe).Source).VersionInfo.ProductVersion
+python .\scripts\m8_matrix.py --trace .\runs\new_trace.jsonl --labels .\runs\new_labels\labels.json --out .\runs\matrix_new_trace_1 --lockfile .\runs\requirements-lock-m6.txt --sysmon-version $sysmonVersion --set-role held_out --journal-bytes 8388608 --segment-events 128 --budget-bytes 9437184 10485760 11534336 12582912
+```
+
+The paths above are **command shape**, not existing files: substitute a new
+trace, its own frozen labels, an appropriate tuning/held-out role, and fresh
+output directory. For each scenario family and role, collect enough distinct
+traces for the configured minimum (default 10) before interpreting CIs.
+Different deterministic replays of one trace never increase independent `n`.
