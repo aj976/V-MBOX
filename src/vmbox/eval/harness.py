@@ -11,6 +11,7 @@ from vmbox.eval.coverage import coverage
 from vmbox.eval.labels import read_labels
 from vmbox.eval.matching import match_labels
 from vmbox.eval.metrics import budget_fraction_of_full, event_loss_rate, storage_efficiency
+from vmbox.eval.policies import PolicyStrategy
 from vmbox.eval.strategy import EvaluationStrategy, SelectionOutcome
 from vmbox.integrity.chain import verify_chain
 from vmbox.integrity.genesis import manifest_genesis
@@ -96,8 +97,18 @@ def run_evaluation(trace_path: Path, labels_path: Path, output_dir: Path, *,
         if unbounded_bytes_retained is None or unbounded_bytes_retained <= 0:
             raise ValueError("budgeted evaluation requires measured unbounded bytes")
         sealed_allowance = budget_bytes - journal_bytes
-    outcome = strategy.select(events, sealed_allowance)
-    _validate_selection(events, outcome)
+    if isinstance(strategy, PolicyStrategy) and strategy.segment_events is not None:
+        outcomes = strategy.select_batches(events, sealed_allowance)
+        batches = tuple(events[start:start + strategy.segment_events]
+                        for start in range(0, len(events), strategy.segment_events))
+        if len(outcomes) != len(batches):
+            raise ValueError("strategy batch count changed")
+        for batch, selected_batch in zip(batches, outcomes, strict=True):
+            _validate_selection(batch, selected_batch)
+    else:
+        outcomes = (strategy.select(events, sealed_allowance),)
+        _validate_selection(events, outcomes[0])
+    outcome = outcomes[0] if len(outcomes) == 1 else None
     manifest = SessionManifest(
         schema_version=1, mode="offline_eval", session_id=header.session_id,
         boot_id=header.boot_id, host=header.host["windows_build"],
@@ -107,6 +118,8 @@ def run_evaluation(trace_path: Path, labels_path: Path, output_dir: Path, *,
         journal_bytes=journal_bytes, anchor=None,
     )
     if strategy.name == "unbounded":
+        if outcome is None:
+            raise AssertionError("unbounded replay must use one segment")
         raw, _ = encode_segment(
             index=0, events=list(outcome.events),
             prev_hash="sha256:" + manifest_genesis(manifest).hex(),
@@ -120,18 +133,27 @@ def run_evaluation(trace_path: Path, labels_path: Path, output_dir: Path, *,
     journal_path = output_dir / "journal.bin"
     create_journal(journal_path, journal_bytes)
     append_journal_many(journal_path, events)
-    if outcome.events:
+    sealed_batches: list[SelectionOutcome] = []
+    if any(item.events for item in outcomes):
         if strategy.name == "unbounded":
+            if outcome is None:
+                raise AssertionError("unbounded replay must use one segment")
             seal_segment(
                 output_dir / "seg_00000000.vseg", index=0, events=list(outcome.events),
                 prev_hash="sha256:" + manifest_genesis(manifest).hex(),
                 strategy=strategy.name, selection_stats=outcome.stats,
             )
         else:
-            BudgetedSegmentStore(output_dir, manifest).seal(
-                list(outcome.events), strategy.name, outcome.stats,
-                evicted_ts_ns=max(event.ts_ns for event in events),
-            )
+            scorer = (strategy.eviction_scorer(events)
+                      if isinstance(strategy, PolicyStrategy) else None)
+            segment_store = BudgetedSegmentStore(output_dir, manifest, eviction_score=scorer)
+            for selected_batch in outcomes:
+                if selected_batch.events:
+                    segment_store.seal(
+                        list(selected_batch.events), strategy.name, selected_batch.stats,
+                        evicted_ts_ns=max(event.ts_ns for event in selected_batch.events),
+                    )
+                    sealed_batches.append(selected_batch)
     chain = verify_chain(output_dir, manifest)
     if chain.status != "ok":
         raise ValueError("offline replay chain failed verification")
@@ -148,8 +170,10 @@ def run_evaluation(trace_path: Path, labels_path: Path, output_dir: Path, *,
     }
     coverage_result = coverage(attack_steps, collected_steps, persisted_steps)
     source_ids = {event.event_id for event in events}
-    selected_ids = {event.event_id for event in outcome.events}
-    accounted_drops = (source_ids - selected_ids) - persisted_ids
+    selected_ids = {event.event_id for item in outcomes for event in item.events}
+    evicted_ids = {event.event_id for entry in chain.entries if entry.kind == "tombstone"
+                   for event in sealed_batches[entry.index].events}
+    accounted_drops = ((source_ids - selected_ids) | evicted_ids) - persisted_ids
     metrics = EvaluationMetrics(
         evidence_coverage=coverage_result.evidence_coverage,
         collection_coverage=coverage_result.collection_coverage,

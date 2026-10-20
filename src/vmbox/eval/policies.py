@@ -119,10 +119,13 @@ def _promoted(events: tuple[Event, ...]) -> frozenset[str]:
 @dataclass(frozen=True)
 class PolicyStrategy:
     name: StrategyName
+    segment_events: int | None = None
 
     def __post_init__(self) -> None:
         if self.name not in {"fifo_ring", "fixed", "priority", "context_aware"}:
             raise ValueError("unsupported budgeted strategy")
+        if self.segment_events is not None and self.segment_events <= 0:
+            raise ValueError("segment_events must be positive")
 
     @property
     def rules_version(self) -> str:
@@ -144,9 +147,32 @@ class PolicyStrategy:
 
     def select(self, events: tuple[Event, ...], sealed_bytes_budget: int | None,
                ) -> SelectionOutcome:
+        return self._select(events, sealed_bytes_budget, _promoted(events)
+                            if self.name == "context_aware" else frozenset())
+
+    def select_batches(self, events: tuple[Event, ...], sealed_bytes_budget: int | None,
+                       ) -> tuple[SelectionOutcome, ...]:
+        if self.segment_events is None:
+            return (self.select(events, sealed_bytes_budget),)
+        if sealed_bytes_budget is None:
+            raise ValueError("budgeted strategy requires a sealed-byte allowance")
+        promoted = _promoted(events) if self.name == "context_aware" else frozenset()
+        # Reserve room for other segments and tombstones. A batch that cannot
+        # fit one event uses the whole allowance; the store still enforces B.
+        target = sealed_bytes_budget // 3
+        outcomes = []
+        for start in range(0, len(events), self.segment_events):
+            batch = events[start:start + self.segment_events]
+            chosen = self._select(batch, target, promoted)
+            if not chosen.events and target < sealed_bytes_budget:
+                chosen = self._select(batch, sealed_bytes_budget, promoted)
+            outcomes.append(chosen)
+        return tuple(outcomes)
+
+    def _select(self, events: tuple[Event, ...], sealed_bytes_budget: int | None,
+                promoted: frozenset[str]) -> SelectionOutcome:
         if sealed_bytes_budget is None or sealed_bytes_budget < 0:
             raise ValueError("budgeted strategy requires a nonnegative allowance")
-        promoted = _promoted(events) if self.name == "context_aware" else frozenset()
         eligible = (tuple(event for event in events if event.event_type in FIXED_TYPES)
                     if self.name == "fixed" else events)
         if self.name in {"fifo_ring", "fixed"}:

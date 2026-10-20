@@ -1,15 +1,21 @@
 """Synthetic selection checks; these are not VM measurements."""
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
 from test_eval_harness import _inputs, _versions
 
+from scripts.m6_eval import reference_bytes
 from vmbox.collect.trace import read_trace
 from vmbox.eval.harness import run_evaluation
 from vmbox.eval.policies import PolicyStrategy
 from vmbox.eval.strategy import UnboundedStrategy
+from vmbox.integrity.chain import verify_chain
 from vmbox.normalize.normalizer import Normalizer
+from vmbox.schema import SessionManifest
+from vmbox.store.budget import retained_bytes
 
 
 def test_budgeted_strategies_share_four_total_budgets(tmp_path: Path) -> None:
@@ -86,3 +92,46 @@ def test_target_activity_and_spawned_child_promote_lineage(tmp_path: Path) -> No
     score = PolicyStrategy("context_aware").eviction_scorer((access, activity, child))
     assert score((activity,)) > PolicyStrategy("priority").eviction_scorer(
         (access, activity, child))((activity,))
+
+
+def test_segmented_replay_uses_same_budget_and_verifies_chain(tmp_path: Path) -> None:
+    trace, labels = _inputs(tmp_path)
+    full = run_evaluation(
+        trace, labels, tmp_path / "full_segmented", strategy=UnboundedStrategy(),
+        journal_bytes=2048, budget_bytes=None, unbounded_bytes_retained=None,
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+    )
+    assert full.bytes_retained is not None
+    for name in ("fifo_ring", "fixed", "priority", "context_aware"):
+        for budget in (4096, 5000, 6000, 8192):
+            directory = tmp_path / f"segmented_{name}_{budget}"
+            result = run_evaluation(
+                trace, labels, directory, strategy=PolicyStrategy(name, segment_events=1),
+                journal_bytes=2048, budget_bytes=budget,
+                unbounded_bytes_retained=full.bytes_retained,
+                git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+            )
+            assert result.bytes_retained == retained_bytes(directory)
+            assert result.bytes_retained <= budget
+            assert result.metrics.event_loss_rate == 0
+            assert len(list(directory.glob("seg_*.vseg"))) >= 1
+            manifest = SessionManifest.from_dict(json.loads(
+                (directory / "manifest.json").read_bytes()))
+            assert verify_chain(directory, manifest).status == "ok"
+            if name == "priority" and budget == 4096:
+                assert len(list(directory.glob("seg_*.tomb"))) >= 1
+
+
+def test_reference_rejects_mismatched_frozen_labels(tmp_path: Path) -> None:
+    trace, labels = _inputs(tmp_path)
+    run_evaluation(
+        trace, labels, tmp_path / "reference", strategy=UnboundedStrategy(),
+        journal_bytes=2048, budget_bytes=None, unbounded_bytes_retained=None,
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+    )
+    result_path = tmp_path / "reference" / "result.json"
+    assert reference_bytes(result_path, trace, labels) > 0
+    altered_labels = tmp_path / "altered_labels.json"
+    altered_labels.write_bytes(labels.read_bytes() + b" ")
+    with pytest.raises(ValueError, match="hashes do not match"):
+        reference_bytes(result_path, trace, altered_labels)
