@@ -47,3 +47,5 @@ python -m vmbox.cli verify --evidence .\runs\family1_unbounded
 ```
 
 The harness uses the actual journal and sealed-segment encoding, then measures `journal.bin` plus sealed segments and tombstones. It excludes receipts. The result has no experimental budget; unmeasured latency, loss, crash, and reconstruction metrics remain `null`. The manifest's allocation equals the exact serialized retained size and is used only to satisfy the session storage format. This offline result is `chained` at best and is not forensic evidence. VM behavior and live capture are unverified until the scenario is run on the Windows VM.
+
+The `benign_lookalike` family is held out from M6 rule tuning. Its frozen traces and labels are used only for later evaluation; do not inspect its outcome to adjust selection rules or label windows. The `child_chain` and `query_connect` families are development scenarios.

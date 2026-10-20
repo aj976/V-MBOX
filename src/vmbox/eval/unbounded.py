@@ -42,6 +42,8 @@ def run_unbounded(trace_path: Path, labels_path: Path, output_dir: Path, *,
         raise ValueError("frozen labels have unresolved matches")
     if journal_bytes < 80:
         raise ValueError("journal too small")
+    if any(len(event.to_json()) + 8 >= journal_bytes - 64 for event in events):
+        raise ValueError("journal cannot hold an event frame")
     by_type: dict[str, int] = {}
     for event in events:
         by_type[event.event_type] = by_type.get(event.event_type, 0) + 1
