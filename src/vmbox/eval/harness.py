@@ -4,6 +4,7 @@ import os
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 from vmbox.collect.trace import read_trace
@@ -19,7 +20,7 @@ from vmbox.integrity.segment import verify_segment
 from vmbox.normalize.normalizer import Normalizer
 from vmbox.schema import (
     EvaluationMetrics,
-    EvaluationResult,
+    EvaluationResultV2,
     Event,
     PersistenceLatency,
     ReconstructionAccuracy,
@@ -72,7 +73,8 @@ def run_evaluation(trace_path: Path, labels_path: Path, output_dir: Path, *,
                    strategy: EvaluationStrategy, journal_bytes: int,
                    budget_bytes: int | None, unbounded_bytes_retained: int | None,
                    git_commit: str, git_dirty: bool,
-                   tool_versions: ToolVersions) -> EvaluationResult:
+                   tool_versions: ToolVersions,
+                   set_role: Literal["tuning", "held_out"]) -> EvaluationResultV2:
     """Replay one frozen trace without exposing labels to the selection strategy."""
     header, records = read_trace(trace_path)
     labels = read_labels(labels_path)
@@ -187,7 +189,7 @@ def run_evaluation(trace_path: Path, labels_path: Path, output_dir: Path, *,
         if budget_bytes is None or unbounded_bytes_retained is None:
             raise AssertionError("validated budget inputs became unavailable")
         fraction = budget_fraction_of_full(budget_bytes, unbounded_bytes_retained)
-    result = EvaluationResult(
+    result = EvaluationResultV2(
         run_id=str(uuid4()), scenario_id=labels.scenario_id, seed=labels.seed,
         strategy=strategy.name, budget_bytes=budget_bytes,
         budget_fraction_of_full=fraction,
@@ -196,7 +198,7 @@ def run_evaluation(trace_path: Path, labels_path: Path, output_dir: Path, *,
         label_hash="sha256:" + sha256(labels_path.read_bytes()).hexdigest(),
         config_hash=header.config_hash, git_commit=git_commit, git_dirty=git_dirty,
         strategy_rules_version=strategy.rules_version, tool_versions=tool_versions,
-        metrics=metrics,
+        metrics=metrics, result_format_version=2, set_role=set_role,
     )
     with (output_dir / "result.json").open("xb") as stream:
         stream.write(result.to_json())

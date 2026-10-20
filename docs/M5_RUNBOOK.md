@@ -43,7 +43,7 @@ If an evaluation is interrupted, leave that incomplete output directory untouche
 ```powershell
 $sysmonVersion = (Get-Item (Get-Command sysmon64.exe).Source).VersionInfo.ProductVersion
 python -m pip freeze --all | Out-File -Encoding utf8 .\runs\requirements-lock.txt
-python .\scripts\m5_eval.py --trace .\runs\family1_trace.jsonl --labels .\runs\family1_labels\labels.json --out .\runs\family1_unbounded --journal-bytes 8388608 --lockfile .\runs\requirements-lock.txt --sysmon-version $sysmonVersion
+python .\scripts\m5_eval.py --trace .\runs\family1_trace.jsonl --labels .\runs\family1_labels\labels.json --out .\runs\family1_unbounded --journal-bytes 8388608 --lockfile .\runs\requirements-lock.txt --sysmon-version $sysmonVersion --set-role tuning
 python -m vmbox.cli verify --evidence .\runs\family1_unbounded
 ```
 

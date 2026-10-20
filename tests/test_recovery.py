@@ -20,7 +20,7 @@ def _unbounded(tmp_path: Path) -> Path:
     run_evaluation(
         trace, labels, output, strategy=UnboundedStrategy(), journal_bytes=2048,
         budget_bytes=None, unbounded_bytes_retained=None,
-        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
     )
     return output
 
@@ -40,7 +40,7 @@ def test_recovery_reports_tombstone_and_journal_only(tmp_path: Path) -> None:
     reference = run_evaluation(
         trace, labels, tmp_path / "reference", strategy=UnboundedStrategy(),
         journal_bytes=2048, budget_bytes=None, unbounded_bytes_retained=None,
-        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
     )
     assert reference.bytes_retained is not None
     output = tmp_path / "budgeted"
@@ -48,7 +48,7 @@ def test_recovery_reports_tombstone_and_journal_only(tmp_path: Path) -> None:
         trace, labels, output, strategy=PolicyStrategy("priority", segment_events=1),
         journal_bytes=2048, budget_bytes=4096,
         unbounded_bytes_retained=reference.bytes_retained,
-        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
     )
     recovered = recover_evidence(output)
     assert recovered.status == "incomplete"

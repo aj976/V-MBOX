@@ -298,8 +298,8 @@ If multiple candidates remain, the matcher writes `match_review.json` with `run_
 
 ## 9. Evaluation result
 
-Template, not a measurement. `null` metrics mean "not measured". A result is invalid if any provenance field is missing. `tool_versions.etw_pywintrace` is required when ETW/pywintrace was used and otherwise is `null`.
-Each replay run writes one canonical `result.json` containing the object below. The cross-run `results.json` and summary tables in the experiment flow are planned M8 aggregate artifacts; their format is not defined in schema version 1.
+Legacy v1 template, not a measurement. `null` metrics mean "not measured". A result is invalid if any provenance field is missing. `tool_versions.etw_pywintrace` is required when ETW/pywintrace was used and otherwise is `null`.
+The object below is the persisted v1 `result.json` format, retained for reading existing M5/M6 artifacts. New per-run results use format v2: they contain every v1 field plus required `"result_format_version":2` and `"set_role":"tuning"` or `"held_out"`. The v2 reader rejects an absent or invalid role. A v1 file is never rewritten; reading it for aggregation requires an explicit canonical role map `{ "run_id": "tuning" }` or `{ "run_id": "held_out" }`, hashed into `results.json`. A missing mapping entry is a hard error. This per-run format change does not change evidence `schema_version` 1.
 
 ```json
 {
@@ -333,3 +333,58 @@ Each replay run writes one canonical `result.json` containing the object below. 
 `strategy` is exactly one of `unbounded`, `fixed`, `priority`, `context_aware`, `fifo_ring`. For `unbounded`, both `budget_bytes` and `budget_fraction_of_full` are `null`; for every other strategy both are required and the budget is nonnegative. `bytes_retained` is required for all strategies and is `null` until measured, then a nonnegative integer. The *full size* for one trace is the `bytes_retained` of its unbounded run using the same serialization. A budgeted result computes `budget_fraction_of_full = budget_bytes / full_size`; a zero or unmeasured full size makes that comparison unavailable, never zero or infinity. Fractions above 1 are valid when a budget exceeds full size. Tables and plots show `n/a (unbounded)` for the unbounded fraction and use it as a reference line, never as a competing strategy. The zero seed in this template is structural, not a run measurement. The all-zero hashes and commit are template tokens; a real result must replace them with recorded provenance. All measured numbers come from runs.
 
 For offline replay, `event_loss_rate` is computed only against normalized events already present in the verified raw trace. It does not measure upstream ETW or Sysmon loss; those source counters are reported separately and remain unmeasured when the source API does not expose them.
+
+### 9.1 Cross-run aggregate (derived format 1)
+
+`results.json` is derived data with `aggregate_format_version:1`; it does not
+change evidence `schema_version`. It is built from an archived canonical
+`attempts.json` containing an `attempts` array. Each attempt has `run_id`,
+`result_path` (relative to the manifest, or null on failure), and
+`failure_reason` (null on success, nonempty on failure). The aggregate records
+the exact SHA-256 of the attempt manifest, every input result file, and an
+optional legacy role map. Failed run IDs and reasons are listed and included in
+`runs_attempted = runs_completed + runs_failed`.
+
+Required top-level fields are `aggregate_format_version`, `generated_at`
+(integer UTC nanoseconds), `unit_of_analysis: "independent_trace"`, `ci_method`,
+`attempts_file_hash`, `legacy_role_map_hash` (nullable), `inputs`, sorted
+`run_ids`, the three run counts, `failed_runs`, `groups`, `comparisons`,
+nonempty `limitations`, and `content_hash`. The content hash is SHA-256 of
+`canonical_json(results.json without generated_at and content_hash)`.
+Rebuilding from unchanged inputs gives byte-identical content after those two
+fields are excluded.
+
+A group is keyed by `scenario_family`, `set_role`, `strategy`, and
+`budget_bytes`. It records `strategy_rules_version`, sorted `trace_hashes`, the
+per-trace `trace_hash → label_hash` mapping, `config_hash`, required tool
+versions (python, vmbox, lockfile_hash, windows_build, sysmon_version), sorted
+run IDs, and per-metric `{mean, ci_95, n, reason, ci_reason}`. `reason` explains
+an unavailable metric value; `ci_reason` explains an unavailable interval.
+Every group has one rule
+version, config hash, and tool-version tuple. Paired strategy groups must have
+the same trace-hash set and the same label hash for each trace; no partial
+pooling is allowed. Different independent traces may have different frozen
+label hashes. Tuning and held-out traces cannot be pooled or share a trace.
+Deterministic replays of one trace are one independent unit and cannot be counted
+as replicates. Seeds count only when they change the recorded trace; stochastic
+strategies would need a separately documented independence design.
+
+`ci_method` states bootstrap percentile, fixed RNG seed, resample count,
+minimum runs (default 10), number of comparisons, and `unadjusted:true`.
+Unpaired group means/CIs use independent traces. Comparison differences are
+computed trace by trace before bootstrapping. With fewer than `minimum_runs`,
+`ci_95` is null and `ci_reason` is `insufficient_runs`; an unavailable metric has
+null mean/CI with `reason` `not_measured` or `partial_measurement`. A measured
+mean below the minimum also has `reason: "insufficient_runs"` for compatibility
+with simple tables. No result is coerced
+to zero or omitted. A comparison's `verdict` is `difference_resolved` only
+when its paired CI excludes zero, otherwise `inconclusive`. The number of
+comparisons and unadjusted-CI limitation accompany every table. Unbounded is
+shown as an `n/a (unbounded)` reference line; collection and evidence coverage
+appear together. Tables are rendered only from validated `results.json`.
+
+Template, not a measurement (synthetic failed-attempt shape):
+
+```text
+{"aggregate_format_version":1,"generated_at":0,"unit_of_analysis":"independent_trace","ci_method":{"name":"bootstrap_percentile","seed":1,"resamples":2000,"minimum_runs":10,"comparison_count":0,"unadjusted":true},"attempts_file_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","legacy_role_map_hash":null,"inputs":[],"run_ids":[],"runs_attempted":1,"runs_completed":0,"runs_failed":1,"failed_runs":[{"run_id":"synthetic-failure","reason":"synthetic fixture"}],"groups":[],"comparisons":[],"limitations":["Synthetic fixture, not a measurement."],"content_hash":"sha256:e0d72f2f6823aacf39e24a84aca595af49cdd85460120fb5f74ea847f9cf2d2f"}
+```

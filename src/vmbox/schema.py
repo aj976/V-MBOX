@@ -675,3 +675,14 @@ class EvaluationResult(SchemaModel):
             raise ValueError("budgeted strategy requires nonnegative budget and fraction")
         if self.bytes_retained is not None and self.bytes_retained < 0:
             raise ValueError("negative retained bytes")
+
+
+@dataclass(frozen=True)
+class EvaluationResultV2(EvaluationResult):
+    result_format_version: int
+    set_role: Literal["tuning", "held_out"]
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.result_format_version != 2:
+            raise ValueError("unsupported evaluation result format")

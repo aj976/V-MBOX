@@ -31,6 +31,7 @@ def main() -> int:
                         help="frozen pip package snapshot from this VM run")
     parser.add_argument("--sysmon-version", required=True,
                         help="version reported by Sysmon on the VM")
+    parser.add_argument("--set-role", choices=("tuning", "held_out"), required=True)
     args = parser.parse_args()
     if platform.system() != "Windows":
         parser.error("M5 live-trace evaluation requires the Windows VM")
@@ -55,6 +56,7 @@ def main() -> int:
         args.trace, args.labels, args.out, journal_bytes=args.journal_bytes,
         git_commit=commit, git_dirty=dirty,
         strategy_rules_version="unbounded-v1", tool_versions=versions,
+        set_role=args.set_role,
     )
     print("offline evaluation session, not forensic evidence")
     print(f"run_id: {result.run_id}")

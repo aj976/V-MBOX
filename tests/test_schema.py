@@ -10,6 +10,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from vmbox.canonical import canonical_json
+from vmbox.eval.aggregate_schema import AggregateResult
 from vmbox.schema import (
     Checkpoint,
     EvaluationResult,
@@ -48,6 +49,15 @@ def test_report_schema_example_loads_and_validates():
     assert match is not None
     data = json.loads(match.group(1))
     assert Report.from_dict(data).to_dict() == data
+
+
+def test_aggregate_schema_example_loads_and_validates():
+    text = SCHEMA.read_text(encoding="utf-8")
+    match = re.search(r"Template, not a measurement \(synthetic failed-attempt shape\):\s*"
+                      r"```text\s*(.*?)```", text, re.DOTALL)
+    assert match is not None
+    data = json.loads(match.group(1))
+    assert AggregateResult.from_dict(data).to_dict() == data
 
 
 def test_gap_null_rules_and_closed_reason():

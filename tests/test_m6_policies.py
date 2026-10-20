@@ -24,7 +24,7 @@ def test_budgeted_strategies_share_four_total_budgets(tmp_path: Path) -> None:
     full = run_evaluation(
         trace, labels, tmp_path / "full", strategy=UnboundedStrategy(),
         journal_bytes=2048, budget_bytes=None, unbounded_bytes_retained=None,
-        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
     )
     assert full.bytes_retained is not None
     budgets = (2048, 3072, 4096, full.bytes_retained)
@@ -34,7 +34,7 @@ def test_budgeted_strategies_share_four_total_budgets(tmp_path: Path) -> None:
                 trace, labels, tmp_path / f"{name}_{budget}",
                 strategy=PolicyStrategy(name), journal_bytes=2048,
                 budget_bytes=budget, unbounded_bytes_retained=full.bytes_retained,
-                git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+                git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
             )
             assert result.bytes_retained is not None
             assert result.bytes_retained <= budget
@@ -100,7 +100,7 @@ def test_segmented_replay_uses_same_budget_and_verifies_chain(tmp_path: Path) ->
     full = run_evaluation(
         trace, labels, tmp_path / "full_segmented", strategy=UnboundedStrategy(),
         journal_bytes=2048, budget_bytes=None, unbounded_bytes_retained=None,
-        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
     )
     assert full.bytes_retained is not None
     for name in ("fifo_ring", "fixed", "priority", "context_aware"):
@@ -110,7 +110,7 @@ def test_segmented_replay_uses_same_budget_and_verifies_chain(tmp_path: Path) ->
                 trace, labels, directory, strategy=PolicyStrategy(name, segment_events=1),
                 journal_bytes=2048, budget_bytes=budget,
                 unbounded_bytes_retained=full.bytes_retained,
-                git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+                git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
             )
             assert result.bytes_retained == retained_bytes(directory)
             assert result.bytes_retained <= budget
@@ -137,7 +137,7 @@ def test_reference_rejects_mismatched_frozen_labels(tmp_path: Path) -> None:
     run_evaluation(
         trace, labels, tmp_path / "reference", strategy=UnboundedStrategy(),
         journal_bytes=2048, budget_bytes=None, unbounded_bytes_retained=None,
-        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
     )
     result_path = tmp_path / "reference" / "result.json"
     assert reference_bytes(result_path, trace, labels) > 0

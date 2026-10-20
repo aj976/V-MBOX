@@ -44,7 +44,8 @@ def test_unbounded_replay_measures_real_retained_bytes(tmp_path: Path):
     out = tmp_path / "run"
     result = run_unbounded(trace, labels_path, out, journal_bytes=2048,
                            git_commit="a" * 40, git_dirty=False,
-                           strategy_rules_version="test", tool_versions=versions)
+                           strategy_rules_version="test", tool_versions=versions,
+                           set_role="tuning")
     manifest = read_manifest(out / "manifest.json")
     assert manifest.mode == "offline_eval" and manifest.anchor is None
     assert verify_chain(out, manifest).status == "ok"
@@ -57,4 +58,5 @@ def test_unbounded_replay_measures_real_retained_bytes(tmp_path: Path):
     with pytest.raises(FileExistsError):
         run_unbounded(trace, labels_path, out, journal_bytes=2048,
                       git_commit="a" * 40, git_dirty=False,
-                      strategy_rules_version="test", tool_versions=versions)
+                      strategy_rules_version="test", tool_versions=versions,
+                      set_role="tuning")

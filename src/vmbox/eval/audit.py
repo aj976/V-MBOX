@@ -12,7 +12,7 @@ from vmbox.integrity.chain import verify_chain
 from vmbox.integrity.genesis import manifest_genesis
 from vmbox.integrity.segment import verify_segment
 from vmbox.normalize.normalizer import Normalizer
-from vmbox.schema import EvaluationResult
+from vmbox.schema import EvaluationResult, EvaluationResultV2
 from vmbox.store.budget import retained_bytes
 from vmbox.store.journal import recover_journal
 from vmbox.store.manifest import read_manifest
@@ -39,7 +39,10 @@ def audit_run(trace_path: Path, labels_path: Path, directory: Path) -> Retention
     trace_raw = trace_path.read_bytes()
     labels_raw = labels_path.read_bytes()
     result_raw = (directory / "result.json").read_bytes()
-    result = EvaluationResult.from_dict(json.loads(result_raw))
+    result_data = json.loads(result_raw)
+    result = (EvaluationResultV2.from_dict(result_data)
+              if "result_format_version" in result_data else
+              EvaluationResult.from_dict(result_data))
     if result.to_json() != result_raw:
         raise ValueError("noncanonical evaluation result")
     if result.trace_hash != "sha256:" + sha256(trace_raw).hexdigest():

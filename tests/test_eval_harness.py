@@ -75,7 +75,7 @@ def test_dummy_runs_end_to_end_without_receiving_labels(tmp_path: Path):
     result = run_evaluation(
         trace, labels, tmp_path / "run", strategy=strategy, journal_bytes=2048,
         budget_bytes=8192, unbounded_bytes_retained=16384,
-        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+        git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
     )
     assert strategy.received is not None
     assert all(type(item) is Event for item in strategy.received)
@@ -102,6 +102,6 @@ def test_harness_rejects_strategy_output_not_from_stream(tmp_path: Path):
         run_evaluation(
             trace, labels, tmp_path / "bad", strategy=ForgingDummy(), journal_bytes=2048,
             budget_bytes=8192, unbounded_bytes_retained=16384,
-            git_commit="a" * 40, git_dirty=False, tool_versions=_versions(),
+            git_commit="a" * 40, git_dirty=False, tool_versions=_versions(), set_role="tuning",
         )
     assert not (tmp_path / "bad").exists()
