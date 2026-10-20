@@ -73,6 +73,15 @@ After the listener is reachable, retry pending receipts without changing any
 sealed evidence. Export a **copy** of `C:\vmbox-anchor-ledger` from the anchor
 VM into a fresh directory on the monitored VM, then compare both receipt logs:
 
+For the two-VM lab prepared with `lab_anchor_setup.ps1`, run
+`scripts/lab_anchor_export.ps1 -LabRoot <printed-lab-root> -Trial <printed-trial>`
+on the laptop after the recorder finishes. It reads the session ID from the
+host manifest, transfers only the matching anchor receipt files through
+authenticated WinRM, checks their SHA-256 hashes after transfer, and writes a
+new `anchor_export_<trial>` directory on the monitored VM. It refuses to
+overwrite an earlier export. Pass that printed directory to
+`--anchor-receipts` in `verify`, `recover`, and `report`.
+
 ```powershell
 python -m vmbox.cli anchor-sync --evidence .\runs\live_probe_1 --anchor-pubkey C:\vmbox-anchor-public\public.pem --anchor-auth-key C:\vmbox-anchor-public\auth.key
 python -m vmbox.cli verify --evidence .\runs\live_probe_1 --anchor-pubkey C:\vmbox-anchor-public\public.pem --anchor-receipts C:\vmbox-anchor-export
