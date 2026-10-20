@@ -53,10 +53,11 @@ try {
                 $versionOutput = @(& $pythonPath --version 2>&1)
                 if ($LASTEXITCODE -eq 0 -and $versionOutput.Count -gt 0) {
                     $pythonVersion = [string]$versionOutput[0]
-                    $importOutput = @(& $pythonPath -c 'import vmbox, cryptography, psutil, win32evtlog' 2>&1)
+                    $importCheck = "import sys; sys.path.insert(0, r'$Checkout\src'); import vmbox, cryptography, psutil, win32evtlog"
+                    $importOutput = @(& $pythonPath -c $importCheck 2>&1)
                     $runtimeImports = ($LASTEXITCODE -eq 0)
                     if (-not $runtimeImports) {
-                        $pythonIssue = (@($importOutput | Select-Object -First 2) -join '; ')
+                        $pythonIssue = (@($importOutput | Select-Object -Last 2) -join '; ')
                     }
                 }
                 else { $pythonIssue = 'Python executable exists but did not start successfully' }
