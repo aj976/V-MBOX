@@ -8,6 +8,7 @@ from uuid import UUID, uuid5
 
 import pytest
 
+from vmbox.eval.labels import freeze_labels
 from vmbox.eval.matching import (
     apply_review,
     match_labels,
@@ -15,7 +16,6 @@ from vmbox.eval.matching import (
     resolve_match_review,
     write_match_review,
 )
-from vmbox.eval.labels import freeze_labels
 from vmbox.schema import Event, GroundTruthLabel, ReviewResolution
 
 
