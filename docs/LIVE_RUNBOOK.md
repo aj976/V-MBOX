@@ -28,6 +28,13 @@ checkout or a bare `python` command. If setup fails, the partial directory is
 left visible and a retry gets a new name. This preparation does not generate
 evidence or anchor keys.
 
+After preparation, run `scripts/lab_anchor_setup.ps1 -LabRoot <printed-lab-root>`
+on the laptop. It generates a new key pair on the anchor VM, transfers only
+`public.pem` and `auth.key` to the monitored VM through the existing authenticated
+WinRM sessions, and opens anchor TCP port 8765 only to the monitored VM IP.
+The script prints new key, ledger, and evidence paths. Keep those exact paths
+for the listener and recorder commands. It does not start either process.
+
 On the **anchor VM**, clone the repository and install the project as in
 `README.md`. Create keys once and start the listener on the IP of its isolated
 VM network adapter (substitute the real address):
