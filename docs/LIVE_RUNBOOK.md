@@ -9,6 +9,11 @@ Before changing either VM, the laptop can run `scripts/lab_vm_preflight.ps1`
 from Windows PowerShell. It prompts for credentials locally, reads each VM's
 identity, repository revision, Python, and Sysmon version, then closes both
 remote sessions. It does not save passwords or create evidence.
+For cloned VMs whose Microsoft-account login cannot authenticate over WinRM,
+run `scripts/lab_remote_account.ps1` once in Administrator PowerShell on each
+VM. It creates a separate, expiring local `vmboxlab` administrator account for
+the isolated lab; the preflight uses that account by default. The account is
+removed after testing with `scripts/lab_remote_account.ps1 -Remove` on each VM.
 
 On the **anchor VM**, clone the repository and install the project as in
 `README.md`. Create keys once and start the listener on the IP of its isolated

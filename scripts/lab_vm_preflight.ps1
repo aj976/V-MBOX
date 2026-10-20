@@ -6,8 +6,8 @@ param(
     [string]$AnchorAddress = '192.168.189.129',
     [string]$MonitoredName = 'ajjj',
     [string]$AnchorName = 'VMBOX-ANCHOR',
-    [string]$MonitoredUser = 'ajjj\aatmi',
-    [string]$AnchorUser = 'VMBOX-ANCHOR\aatmi',
+    [string]$MonitoredUser = 'ajjj\vmboxlab',
+    [string]$AnchorUser = 'VMBOX-ANCHOR\vmboxlab',
     [string]$RepoPath = 'C:\Users\aatmi\OneDrive\Desktop\vmbox'
 )
 
