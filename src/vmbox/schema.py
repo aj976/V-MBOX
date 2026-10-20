@@ -302,16 +302,154 @@ class Relation(SchemaModel):
 @dataclass(frozen=True)
 class Gap(SchemaModel):
     kind: Literal["seq_gap", "capture_gap", "interruption", "tombstone", "incomplete_write"]
-    seq_range: list[int]
-    ts_range_ns: list[int]
+    reason: Literal["missing_sequence", "collector_reported_gap", "no_stop_marker",
+                    "budget_eviction", "torn_frame_no_header",
+                    "crc_failure_unreadable_payload", "journal_unreadable",
+                    "journal_missing", "chain_incomplete", "chain_tampered",
+                    "receipt_verification_failed"]
+    seq_range: list[int] | None
+    ts_range_ns: list[int] | None
+    last_valid_seq: int | None
+    last_valid_ts_ns: int | None
+    next_valid_seq: int | None
+    next_valid_ts_ns: int | None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        allowed = {
+            "seq_gap": {"missing_sequence"},
+            "capture_gap": {"collector_reported_gap"},
+            "tombstone": {"budget_eviction"},
+            "interruption": {"no_stop_marker"},
+            "incomplete_write": {"torn_frame_no_header",
+                                 "crc_failure_unreadable_payload", "journal_unreadable",
+                                 "journal_missing", "chain_incomplete", "chain_tampered",
+                                 "receipt_verification_failed"},
+        }
+        if self.reason not in allowed[self.kind]:
+            raise ValueError("gap reason does not match kind")
+        if self.kind in {"seq_gap", "capture_gap", "tombstone"} and (
+            self.seq_range is None or self.ts_range_ns is None
+        ):
+            raise ValueError("observed or tombstone gaps require both ranges")
+        for value in (self.seq_range, self.ts_range_ns):
+            if value is not None and (len(value) != 2 or value[0] < 0
+                                      or value[0] > value[1]):
+                raise ValueError("invalid gap range")
+        for seq, ts in ((self.last_valid_seq, self.last_valid_ts_ns),
+                        (self.next_valid_seq, self.next_valid_ts_ns)):
+            if (seq is None) != (ts is None) or (seq is not None and seq < 0) \
+                    or (ts is not None and ts < 0):
+                raise ValueError("invalid gap boundary")
 
 
 @dataclass(frozen=True)
 class Reconstruction(SchemaModel):
+    reconstruction_format_version: int
     timeline: list[TimelineEntry]
     relations: list[Relation]
     gaps: list[Gap]
     limitations: list[str]
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.reconstruction_format_version != 1:
+            raise ValueError("unsupported reconstruction format version")
+        if any(gap.seq_range is None or gap.ts_range_ns is None for gap in self.gaps) \
+                and not any("unknown" in item.lower() for item in self.limitations):
+            raise ValueError("unknown gap bounds require an explicit limitation")
+
+
+@dataclass(frozen=True)
+class Report(SchemaModel):
+    report_format_version: int
+    generated_at: int
+    tool_versions: dict[str, str | None]
+    session: dict[str, Any]
+    evidence_identity: dict[str, Any]
+    verify_result: dict[str, Any]
+    recovery_summary: dict[str, Any]
+    integrity_counts: dict[str, int]
+    reconstruction: Reconstruction
+    event_details: list[dict[str, Any]]
+    limitations: list[str]
+    content_hash: str
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.report_format_version != 1 or self.generated_at < 0:
+            raise ValueError("invalid report format or timestamp")
+        if set(self.tool_versions) != {"python", "vmbox"} \
+                or type(self.tool_versions["python"]) is not str \
+                or not self.tool_versions["python"]:
+            raise ValueError("invalid report tool versions")
+        if not self.limitations or any(not item.strip() for item in self.limitations):
+            raise ValueError("report requires non-empty limitations")
+        if not set(self.reconstruction.limitations).issubset(self.limitations):
+            raise ValueError("report cannot remove reconstruction limitations")
+        if set(self.integrity_counts) != {
+            "anchored", "chained", "journal_only", "unverified", "tampered"
+        } or any(count < 0 for count in self.integrity_counts.values()) \
+                or self.integrity_counts["tampered"] > 1:
+            raise ValueError("invalid integrity counts")
+        if set(self.verify_result) != {"output", "exit_code"} \
+                or type(self.verify_result["output"]) is not str \
+                or self.verify_result["exit_code"] not in (0, 1, 2, 3):
+            raise ValueError("invalid verify result")
+        if set(self.session) != {
+            "host", "boot_id", "session_id", "mode", "strategy", "budget_bytes",
+            "collector_version", "pubkey_fingerprint",
+        }:
+            raise ValueError("invalid report session summary")
+        if any(type(self.session[key]) is not str or not self.session[key] for key in
+               ("host", "boot_id", "session_id", "strategy", "collector_version")) \
+                or self.session["mode"] not in ("live", "offline_eval") \
+                or type(self.session["budget_bytes"]) is not int \
+                or self.session["budget_bytes"] < 0 \
+                or (self.session["pubkey_fingerprint"] is not None and
+                    type(self.session["pubkey_fingerprint"]) is not str):
+            raise ValueError("invalid report session values")
+        if set(self.evidence_identity) != {"chain_head_hash", "segment_count",
+                                          "tombstone_count", "hash_inputs"}:
+            raise ValueError("invalid evidence identity")
+        if type(self.evidence_identity["chain_head_hash"]) is not str or any(
+            type(self.evidence_identity[key]) is not int or self.evidence_identity[key] < 0
+            for key in ("segment_count", "tombstone_count")
+        ) or type(self.evidence_identity["hash_inputs"]) is not list:
+            raise ValueError("invalid evidence identity values")
+        for item in self.evidence_identity["hash_inputs"]:
+            if type(item) is not dict or set(item) != {"path", "sha256"} \
+                    or type(item["path"]) is not str or type(item["sha256"]) is not str \
+                    or re.fullmatch(r"sha256:[0-9a-f]{64}", item["sha256"]) is None:
+                raise ValueError("invalid evidence hash input")
+        if set(self.recovery_summary) != {"status", "chain_status", "journal_status",
+                                         "receipt_status", "recovered_events",
+                                         "journal_evicted_frames"}:
+            raise ValueError("invalid recovery summary")
+        if self.recovery_summary["status"] not in ("ok", "incomplete", "tampered") \
+                or type(self.recovery_summary["recovered_events"]) is not int \
+                or self.recovery_summary["recovered_events"] < 0:
+            raise ValueError("invalid recovery status")
+        if self.integrity_counts["tampered"] != int(
+            self.recovery_summary["status"] == "tampered"
+        ):
+            raise ValueError("tampered count must match recovery status")
+        for event in self.event_details:
+            if type(event) is not dict or set(event) != {
+                "event_id", "seq", "pid", "event_type", "image", "cmdline_hash",
+                "cmdline",
+            } or type(event["event_id"]) is not str or type(event["seq"]) is not int:
+                raise ValueError("invalid report event detail")
+        if any(event["cmdline"] is not None for event in self.event_details) and not any(
+            "contains raw command lines, do not share" in item.lower()
+            for item in self.limitations
+        ):
+            raise ValueError("raw command lines require a sharing limitation")
+        content = {key: value for key, value in self.to_dict().items()
+                   if key not in {"generated_at", "content_hash"}}
+        expected = "sha256:" + sha256(canonical_json(content)).hexdigest()
+        if self.content_hash != expected:
+            raise ValueError("report content hash mismatch")
 
 
 @dataclass(frozen=True)

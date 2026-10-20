@@ -194,6 +194,7 @@ An optional anchor-side export is a copy of the anchor's `receipts/` tree. The v
 
 ```json
 {
+  "reconstruction_format_version": 1,
   "timeline": [
     { "ref": "event_id", "ts_ns": 0, "integrity": "anchored" }
   ],
@@ -207,12 +208,64 @@ An optional anchor-side export is a copy of the anchor's `receipts/` tree. The v
       "confidence": "medium"
     }
   ],
-  "gaps": [ { "kind": "seq_gap", "seq_range": [0,0], "ts_range_ns": [0,0] } ],
-  "limitations": [ "string" ]
+  "gaps": [
+    { "kind": "seq_gap", "reason": "missing_sequence", "seq_range": [2,2], "ts_range_ns": [100,200], "last_valid_seq": 1, "last_valid_ts_ns": 100, "next_valid_seq": 3, "next_valid_ts_ns": 200 },
+    { "kind": "capture_gap", "reason": "collector_reported_gap", "seq_range": [4,4], "ts_range_ns": [300,300], "last_valid_seq": 3, "last_valid_ts_ns": 200, "next_valid_seq": 5, "next_valid_ts_ns": 400 },
+    { "kind": "tombstone", "reason": "budget_eviction", "seq_range": [6,8], "ts_range_ns": [500,700], "last_valid_seq": 5, "last_valid_ts_ns": 400, "next_valid_seq": 9, "next_valid_ts_ns": 800 },
+    { "kind": "incomplete_write", "reason": "crc_failure_unreadable_payload", "seq_range": null, "ts_range_ns": null, "last_valid_seq": 9, "last_valid_ts_ns": 800, "next_valid_seq": null, "next_valid_ts_ns": null },
+    { "kind": "interruption", "reason": "no_stop_marker", "seq_range": null, "ts_range_ns": null, "last_valid_seq": 9, "last_valid_ts_ns": 800, "next_valid_seq": null, "next_valid_ts_ns": null }
+  ],
+  "limitations": [ "Unknown gap bounds: the unreadable tail may contain further events." ]
 }
 ```
 
 `temporal_proximity` is always `inferred` and never `high`.
+This is a format template, not a measured reconstruction. `reconstruction_format_version`
+is independent of evidence `schema_version`; both are currently 1. The reason is a closed enum:
+`missing_sequence`, `collector_reported_gap`, `no_stop_marker`, `budget_eviction`,
+`torn_frame_no_header`, `crc_failure_unreadable_payload`, `journal_unreadable`,
+`journal_missing`, `chain_incomplete`, `chain_tampered`, or
+`receipt_verification_failed`. `seq_gap`, `capture_gap`, and `tombstone` require both
+non-null integer ranges. `incomplete_write` and `interruption` may use null ranges only
+with their corresponding enum reason; a free-text reason is invalid. `last_valid_seq`,
+`last_valid_ts_ns`, `next_valid_seq`, and `next_valid_ts_ns` record the nearest known
+observations around each gap and are null when no such observation exists. A null range
+automatically requires a limitation explaining what could not be bounded. Unknown ranges
+render as "unknown", never zero or blank. A seq-gap timestamp range brackets adjacent
+observed timestamps; it is not a timestamp claim about a missing event.
+
+### 7.1 Report output (derived format 1)
+
+`report.json` wraps a version-1 reconstruction; it does not change evidence
+`schema_version`. `generated_at` is an integer UTC nanosecond timestamp and is
+excluded from `content_hash`. The hash is `sha256:` plus lowercase SHA-256 of
+`canonical_json(report without generated_at and content_hash)`. The same evidence
+and software versions therefore yield the same content hash across generation times.
+`report.html` renders only a validated `report.json` and displays that hash.
+
+Required fields are `report_format_version`, `generated_at`, `tool_versions`,
+`session` (host, boot_id, session_id, mode, strategy, budget_bytes,
+collector_version, pubkey_fingerprint or null), `evidence_identity`
+(chain_head_hash, segment_count, tombstone_count, hash_inputs), `verify_result`
+(the actual verify output and exit_code), `recovery_summary`,
+`integrity_counts` (anchored, chained, journal_only, unverified, tampered),
+`reconstruction`, `event_details`, non-empty `limitations`, and `content_hash`.
+The first four integrity counts count reconstructed events. `tampered` is 1 when
+recovery found an integrity failure and 0 otherwise; unreadable contents are not
+counted as recovered events.
+Each `hash_inputs` entry gives a relative evidence path and SHA-256 of exact file
+bytes. Each `event_details` entry contains event_id, seq, pid, event_type, image,
+cmdline_hash, and cmdline. Raw `cmdline` is null unless the trace opted in to
+local raw command-line storage; a report containing it is marked not to share.
+The report generator preserves automatic limitations about unknown gap bounds,
+memory proxies, offline evaluation, chain-only ranges, tombstones, and unchecked
+anchor state. Unknown bounds render as "unknown" in HTML.
+
+Synthetic format example, not a real evidence report:
+
+```text
+{"content_hash":"sha256:e4c0296c0b2ec604aa7fe7787601c82f3a4ec3ec998dc97c3f5b8a4c2553788c","event_details":[],"evidence_identity":{"chain_head_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","hash_inputs":[],"segment_count":0,"tombstone_count":0},"generated_at":0,"integrity_counts":{"anchored":0,"chained":0,"journal_only":0,"tampered":0,"unverified":0},"limitations":["Synthetic fixture.","Synthetic fixture, not forensic evidence."],"reconstruction":{"gaps":[],"limitations":["Synthetic fixture."],"reconstruction_format_version":1,"relations":[],"timeline":[]},"recovery_summary":{"chain_status":"incomplete","journal_evicted_frames":null,"journal_status":"missing","receipt_status":"not applicable to offline evaluation","recovered_events":0,"status":"incomplete"},"report_format_version":1,"session":{"boot_id":"synthetic","budget_bytes":0,"collector_version":"synthetic","host":"synthetic","mode":"offline_eval","pubkey_fingerprint":null,"session_id":"synthetic","strategy":"unbounded"},"tool_versions":{"python":"synthetic","vmbox":"synthetic"},"verify_result":{"exit_code":3,"output":"synthetic fixture"}}
+```
 
 ## 8. Ground-truth label (evaluation only)
 

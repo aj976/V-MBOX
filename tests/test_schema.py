@@ -14,9 +14,11 @@ from vmbox.schema import (
     Checkpoint,
     EvaluationResult,
     Event,
+    Gap,
     GroundTruthLabel,
     Receipt,
     Reconstruction,
+    Report,
     SessionManifest,
     Tombstone,
 )
@@ -37,6 +39,27 @@ def test_schema_examples_load_and_validate():
     for model_type, data in zip(EXAMPLE_TYPES, examples(), strict=True):
         model = model_type.from_dict(data)
         assert json.loads(model.to_json()) == data
+
+
+def test_report_schema_example_loads_and_validates():
+    text = SCHEMA.read_text(encoding="utf-8")
+    match = re.search(r"Synthetic format example, not a real evidence report:\s*"
+                      r"```text\s*(.*?)```", text, re.DOTALL)
+    assert match is not None
+    data = json.loads(match.group(1))
+    assert Report.from_dict(data).to_dict() == data
+
+
+def test_gap_null_rules_and_closed_reason():
+    example = examples()[5]["gaps"][0]
+    with pytest.raises(ValueError, match="require both ranges"):
+        Gap.from_dict({**example, "seq_range": None})
+    torn = examples()[5]["gaps"][3]
+    assert Gap.from_dict(torn).seq_range is None
+    with pytest.raises(ValueError):
+        Gap.from_dict({**torn, "reason": "maybe something happened"})
+    with pytest.raises(ValueError, match="limitation"):
+        Reconstruction.from_dict({**examples()[5], "limitations": []})
 
 
 def test_manifest_mode_anchor_rules():
