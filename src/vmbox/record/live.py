@@ -1,6 +1,7 @@
 """Live Sysmon recorder. Windows VM behavior remains unverified."""
 
 import time
+from collections import deque
 from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -17,6 +18,8 @@ from vmbox.store.manifest import write_manifest
 
 class LiveRecorder:
     """Bound RAM windows; commit journal before selection and sealed segments."""
+
+    SCORING_HISTORY_EVENTS = 8192
 
     def __init__(self, root: Path, header: TraceHeader, strategy: PolicyStrategy,
                  *, budget_bytes: int, journal_bytes: int, segment_events: int,
@@ -47,9 +50,10 @@ class LiveRecorder:
         self.store = BudgetedSegmentStore(root, self.manifest)
         self._journal_pending: list[Event] = []
         self._selection_pending: list[Event] = []
-        # Current observed prefix supplies the same frozen eviction weights as
-        # offline replay. Long-run RAM use is unverified until the VM soak run.
-        self._observed: list[Event] = []
+        # Live eviction uses a bounded recent prefix. This differs from offline
+        # whole-trace scoring; context older than this window is not promoted.
+        # Windows VM rate and memory behavior remain unverified.
+        self._observed: deque[Event] = deque(maxlen=self.SCORING_HISTORY_EVENTS)
         self._last_sync = 0.0
         self.anchor_outages = 0
         self.last_sync = SyncResult(0, 0, None)

@@ -50,11 +50,13 @@ python -m vmbox.cli recover --evidence .\runs\live_probe_1 --anchor-pubkey C:\vm
 ```
 
 The live collector currently batches selection in 128-event windows. Context
-promotion can use only the events observed when each batch seals; it cannot
-retroactively change a prior sealed batch. The journal is flushed at 32 events
-or after an idle interval. These timing and long-run RAM characteristics are
-**unverified until measured on the Windows VM**. Do not merge live and offline
-strategy results as if their selection timing were identical.
+promotion for batch selection uses only that batch; eviction scoring uses the
+most recent 8192 observed events. It cannot retroactively change a prior sealed
+batch, and context outside that bounded history no longer affects eviction.
+The journal is flushed at 32 events or after an idle interval. These timing and
+memory characteristics are **unverified until measured on the Windows VM**. Do
+not merge live and offline strategy results as if their selection timing were
+identical.
 
 Before any crash injection, make a VM snapshot. A forced-kill or power-off run
 must use a new evidence directory. Inspect recovery and report exit codes,

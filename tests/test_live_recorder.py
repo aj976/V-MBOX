@@ -4,6 +4,7 @@ import socket
 import threading
 from pathlib import Path
 
+import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from vmbox.anchor.client import sync_receipts
@@ -87,3 +88,21 @@ def test_anchor_outage_keeps_chained_segments_for_later_sync(tmp_path: Path) -> 
         anchor.shutdown()
         anchor.server_close()
         thread.join(timeout=2)
+
+
+def test_live_scoring_history_has_a_fixed_event_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(LiveRecorder, "SCORING_HISTORY_EVENTS", 2)
+    private = Ed25519PrivateKey.generate()
+    recorder = LiveRecorder(
+        tmp_path / "evidence", make_sysmon_header(b"xml", "boot", "test", 16),
+        PolicyStrategy("fifo_ring"), budget_bytes=100000, journal_bytes=8192,
+        segment_events=128, anchor_endpoint="127.0.0.1:8765",
+        anchor_public_key=private.public_key(), anchor_auth_key=b"k" * 32,
+        host="lab-host",
+    )
+    for record in _records():
+        recorder.on_record(record)
+    assert recorder.events_seen == 3
+    assert [event.seq for event in recorder._observed] == [1, 2]
