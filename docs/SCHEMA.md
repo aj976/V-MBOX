@@ -81,10 +81,12 @@ ETW task-name mapping and QPC timestamp conversion are also **unverified until r
 
 Written at session start, hashed into the chain genesis.
 The write-once file `manifest.json` contains exactly `canonical_json(manifest)` with no trailing newline; these exact bytes are the `H(0)` input.
+`mode` is required and is either `live` or `offline_eval`. A live session requires an anchor with `endpoint` and `pubkey_fingerprint`; an offline evaluation may have `anchor: null` or an anchor object, but its integrity level is at most `chained` regardless. Only the evaluation harness creates `offline_eval` sessions. Offline evaluation artifacts are not forensic evidence.
 
 ```json
 {
   "schema_version": 1,
+  "mode": "live",
   "session_id": "uuid",
   "boot_id": "string",
   "host": "hostname",
@@ -96,6 +98,13 @@ The write-once file `manifest.json` contains exactly `canonical_json(manifest)` 
   "journal_bytes": 8388608,
   "anchor": { "endpoint": "host:port", "pubkey_fingerprint": "sha256:..." }
 }
+```
+
+Offline evaluation example (same fields as above except):
+
+```text
+"mode": "offline_eval",
+"anchor": null
 ```
 
 ## 3. Journal (unsealed)

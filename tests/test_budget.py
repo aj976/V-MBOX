@@ -2,6 +2,7 @@
 
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 from uuid import UUID, uuid5
 
@@ -44,3 +45,19 @@ def test_budget_never_overruns_and_chain_survives_eviction(tmp_path: Path):
     assert sealed > 1
     assert any(tmp_path.glob("*.tomb"))
     assert retained_bytes(tmp_path) <= manifest.budget_bytes
+
+
+def test_retained_bytes_same_for_live_and_offline_and_excludes_receipts(tmp_path: Path):
+    live = SessionManifest.from_dict(examples()[1])
+    offline = replace(live, mode="offline_eval", anchor=None)
+    values = []
+    for mode, manifest in [("live", live), ("offline", offline)]:
+        root = tmp_path / mode
+        root.mkdir()
+        create_journal(root / "journal.bin", manifest.journal_bytes)
+        (root / "seg_00000000.vseg").write_bytes(b"same segment bytes")
+        (root / "seg_00000001.tomb").write_bytes(b"same tombstone bytes")
+        (root / "receipts").mkdir()
+        (root / "receipts" / "receipt.json").write_bytes(b"excluded")
+        values.append(retained_bytes(root))
+    assert values[0] == values[1] == live.journal_bytes + 18 + 20

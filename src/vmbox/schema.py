@@ -172,6 +172,7 @@ class AnchorInfo(SchemaModel):
 @dataclass(frozen=True)
 class SessionManifest(SchemaModel):
     schema_version: int
+    mode: Literal["live", "offline_eval"]
     session_id: str
     boot_id: str
     host: str
@@ -181,7 +182,7 @@ class SessionManifest(SchemaModel):
     strategy: str
     budget_bytes: int
     journal_bytes: int
-    anchor: AnchorInfo
+    anchor: AnchorInfo | None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -189,6 +190,8 @@ class SessionManifest(SchemaModel):
             raise ValueError("invalid manifest version or timestamp")
         if not 0 <= self.journal_bytes <= self.budget_bytes:
             raise ValueError("journal exceeds budget")
+        if self.mode == "live" and self.anchor is None:
+            raise ValueError("live session requires an anchor")
 
 
 @dataclass(frozen=True)

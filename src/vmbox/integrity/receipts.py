@@ -62,6 +62,12 @@ class ReceiptVerification:
 def verify_receipts(manifest: SessionManifest, chain: ChainVerification,
                     public_key: Ed25519PublicKey, host_root: Path,
                     anchor_export_root: Path | None = None) -> ReceiptVerification:
+    if manifest.mode == "offline_eval":
+        return ReceiptVerification(
+            "incomplete", "offline evaluation receipts do not establish forensic integrity", -1
+        )
+    if manifest.anchor is None:
+        return ReceiptVerification("tampered", "live manifest has no anchor", -1)
     if public_key_fingerprint(public_key) != manifest.anchor.pubkey_fingerprint:
         return ReceiptVerification("tampered", "anchor public key fingerprint mismatch", -1)
     session = manifest.session_id

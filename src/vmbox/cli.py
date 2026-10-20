@@ -13,12 +13,19 @@ from vmbox.store.manifest import read_manifest
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vmbox")
     subcommands = parser.add_subparsers(dest="command", required=True)
+    record = subcommands.add_parser("record", help="live recording (not yet implemented)")
+    record.add_argument("--anchor-endpoint")
+    record.add_argument("--anchor-pubkey", type=Path)
     verify = subcommands.add_parser("verify", help="verify local chain and journal integrity")
     verify.add_argument("--evidence", type=Path, required=True)
     verify.add_argument("--anchor-pubkey", type=Path)
     verify.add_argument("--anchor-receipts", type=Path,
                         help="directory containing an exported anchor receipts/ tree")
     args = parser.parse_args(argv)
+    if args.command == "record":
+        if not args.anchor_endpoint or args.anchor_pubkey is None:
+            parser.error("live record requires --anchor-endpoint and --anchor-pubkey")
+        parser.error("live recording is not implemented; unverified until run on Windows VM")
     if args.command == "verify":
         if args.anchor_receipts is not None and args.anchor_pubkey is None:
             parser.error("--anchor-receipts requires --anchor-pubkey")
@@ -38,7 +45,11 @@ def main(argv: list[str] | None = None) -> int:
             journal_reason = "journal missing"
         print(f"chain: {chain.status}; {chain.reason or 'local hash chain matches'}")
         anchor_status = None
-        if args.anchor_pubkey is not None:
+        if manifest.mode == "offline_eval":
+            print("offline evaluation session, not forensic evidence")
+            print(f"integrity level: {'chained' if chain.status == 'ok' else chain.status}")
+            print("receipt status: not applicable to offline evaluation")
+        elif args.anchor_pubkey is not None:
             try:
                 public_key = load_public_key(args.anchor_pubkey)
                 anchor_status = verify_receipts(manifest, chain, public_key, args.evidence,

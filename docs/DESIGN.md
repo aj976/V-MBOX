@@ -111,6 +111,7 @@ Total budget `B` covers journal + sealed segments + tombstones. Strategies compa
 - What this achieves: an attacker who gains host control *after* a checkpoint cannot rewrite earlier anchored segments without a mismatch against signed receipts. Truncation or deletion of recent unanchored segments is detectable as missing receipts.
 - What it does not achieve: it cannot prove events were true. A compromised collector can fabricate or suppress events and they will be stored and chained faithfully. Timestamps from the host are not trusted; anchor time is recorded alongside.
 - If the anchor is unreachable, the recorder continues, records the outage, and later segments are marked `chained` rather than `anchored`.
+- An `offline_eval` session may omit the anchor. It is `chained` at best even if an anchor is configured, has no off-host protection, and must be labeled "offline evaluation session, not forensic evidence" in verification and derived outputs. A `live` session requires anchor configuration before recording starts.
 
 Integrity levels in reports: `anchored` > `chained` > `journal_only` > `unverified`; `tampered` when checks fail.
 

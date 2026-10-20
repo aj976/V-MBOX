@@ -13,6 +13,7 @@ from vmbox.schema import AnchorInfo, SessionManifest
 def test_manifest_genesis_matches_canonical_bytes_and_is_stable(start_ts_ns, host):
     manifest = SessionManifest(
         schema_version=1,
+        mode="live",
         session_id="00000000-0000-4000-8000-000000000001",
         boot_id="boot",
         host=host,
@@ -31,7 +32,7 @@ def test_manifest_genesis_matches_canonical_bytes_and_is_stable(start_ts_ns, hos
 
 def test_manifest_change_changes_genesis():
     base = SessionManifest(
-        1, "00000000-0000-4000-8000-000000000001", "boot", "host", 0, "0.1.0",
+        1, "live", "00000000-0000-4000-8000-000000000001", "boot", "host", 0, "0.1.0",
         "sha256:" + "0" * 64, "fixed", 1024, 128,
         AnchorInfo("host:port", "sha256:" + "1" * 64),
     )

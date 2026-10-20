@@ -19,7 +19,7 @@ def _checkpoint(session: str, index: int, hex_digit: str = "a") -> Checkpoint:
 
 
 def _manifest(session: str, fingerprint: str) -> SessionManifest:
-    return SessionManifest(1, session, str(uuid4()), "host", 1, "0", "sha256:" + "a" * 64,
+    return SessionManifest(1, "live", session, str(uuid4()), "host", 1, "0", "sha256:" + "a" * 64,
                            "baseline", 4096, 1024, AnchorInfo("local", fingerprint))
 
 

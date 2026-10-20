@@ -39,6 +39,20 @@ def test_schema_examples_load_and_validate():
         assert json.loads(model.to_json()) == data
 
 
+def test_manifest_mode_anchor_rules():
+    live = examples()[1]
+    assert SessionManifest.from_dict(live).mode == "live"
+    with pytest.raises(ValueError):
+        SessionManifest.from_dict({**live, "anchor": None})
+    with pytest.raises(ValueError):
+        SessionManifest.from_dict({key: value for key, value in live.items() if key != "mode"})
+    offline = {**live, "mode": "offline_eval", "anchor": None}
+    assert SessionManifest.from_dict(offline).anchor is None
+    assert SessionManifest.from_dict({**offline, "anchor": live["anchor"]}).anchor is not None
+    with pytest.raises(ValueError):
+        SessionManifest.from_dict({**live, "mode": "unknown"})
+
+
 def test_result_requires_every_provenance_field():
     result = examples()[-1]
     required = ["trace_hash", "label_hash", "config_hash", "git_commit", "git_dirty",
