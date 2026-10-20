@@ -1,7 +1,10 @@
 """Local verification CLI uses APPFLOW exit codes and names its limits."""
 
 import json
+import os
 import re
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -46,3 +49,17 @@ def test_record_requires_anchor_config(capsys):
     with pytest.raises(SystemExit):
         main(["record"])
     assert "live record requires" in capsys.readouterr().err
+
+
+def test_offline_verify_needs_no_anchor_crypto_dependency(tmp_path: Path):
+    offline = replace(manifest(), mode="offline_eval", anchor=None)
+    write_manifest(tmp_path / "manifest.json", offline)
+    create_journal(tmp_path / "journal.bin", 2048)
+    source_root = Path(__file__).resolve().parents[1] / "src"
+    result = subprocess.run(
+        [sys.executable, "-S", "-m", "vmbox.cli", "verify", "--evidence", str(tmp_path)],
+        env={**os.environ, "PYTHONPATH": str(source_root)},
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "integrity level: chained" in result.stdout

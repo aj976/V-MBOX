@@ -3,9 +3,7 @@
 import argparse
 from pathlib import Path
 
-from vmbox.anchor.receipt_crypto import load_public_key
 from vmbox.integrity.chain import verify_chain
-from vmbox.integrity.receipts import verify_receipts
 from vmbox.store.journal import recover_journal
 from vmbox.store.manifest import read_manifest
 
@@ -51,6 +49,9 @@ def main(argv: list[str] | None = None) -> int:
             print("receipt status: not applicable to offline evaluation")
         elif args.anchor_pubkey is not None:
             try:
+                from vmbox.anchor.receipt_crypto import load_public_key
+                from vmbox.integrity.receipts import verify_receipts
+
                 public_key = load_public_key(args.anchor_pubkey)
                 anchor_status = verify_receipts(manifest, chain, public_key, args.evidence,
                                                 args.anchor_receipts)
