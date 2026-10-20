@@ -1,9 +1,12 @@
 """Match frozen scenario steps to a normalized trace via a unique nonce anchor."""
 
 import json
+import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
+from time import time_ns
 
 from vmbox.canonical import canonical_json
 from vmbox.schema import (
@@ -40,7 +43,7 @@ def match_labels(labels: GroundTruthLabel, events: list[Event]) -> MatchResult:
         raise ValueError(f"expected exactly one scenario anchor; found {len(anchors)}")
     t0 = anchors[0].ts_ns
     matched: dict[str, str] = {}
-    matched_events: dict[str, Event] = {}
+    matched_events: dict[str, Event] = {"anchor": anchors[0]}
     misses: set[str] = set()
     blocked: set[str] = set()
     ambiguous: list[AmbiguousMatch] = []
@@ -121,3 +124,29 @@ def apply_review(labels: GroundTruthLabel, review: MatchReview) -> GroundTruthLa
     resolutions: list[ReviewResolution] = [item.resolution for item in review.ambiguous
                                            if item.resolution is not None]
     return replace(labels, review_resolutions=resolutions)
+
+
+def resolve_match_review(path: Path, step_id: str, event_id: str, reviewer: str,
+                         *, clock: Callable[[], int] = time_ns) -> MatchReview:
+    """Update the pre-freeze workpaper; frozen labels remain write-once."""
+    review = read_match_review(path)
+    entries = []
+    found = False
+    for item in review.ambiguous:
+        if item.step_id == step_id:
+            if item.resolution is not None:
+                raise ValueError("step already reviewed")
+            resolution = ReviewResolution(step_id, event_id, reviewer, clock())
+            item = replace(item, resolution=resolution)
+            found = True
+        entries.append(item)
+    if not found:
+        raise ValueError("step is not in match review")
+    updated = replace(review, ambiguous=entries)
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("xb") as stream:
+        stream.write(canonical_json(updated.to_dict()))
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    return updated

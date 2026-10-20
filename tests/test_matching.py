@@ -12,8 +12,10 @@ from vmbox.eval.matching import (
     apply_review,
     match_labels,
     read_match_review,
+    resolve_match_review,
     write_match_review,
 )
+from vmbox.eval.labels import freeze_labels
 from vmbox.schema import Event, GroundTruthLabel, ReviewResolution
 
 
@@ -107,10 +109,18 @@ def test_ambiguity_goes_to_review_and_review_is_frozen(tmp_path: Path):
     with pytest.raises(ValueError, match="unresolved"):
         apply_review(labels, result.review)
     resolution = ReviewResolution("s1", first.event_id, "reviewer-a", 123)
-    reviewed = replace(result.review, ambiguous=[
-        replace(result.review.ambiguous[0], resolution=resolution)])
+    reviewed = resolve_match_review(path, "s1", first.event_id, "reviewer-a",
+                                    clock=lambda: 123)
+    assert read_match_review(path) == reviewed
+    with pytest.raises(ValueError, match="already reviewed"):
+        resolve_match_review(path, "s1", second.event_id, "reviewer-b", clock=lambda: 124)
     frozen_labels = apply_review(labels, reviewed)
     assert frozen_labels.review_resolutions == [resolution]
     matched = match_labels(frozen_labels, [marker, first, second])
     assert matched.matched["s1"] == first.event_id
     assert frozen_labels.to_json() != labels.to_json()
+    first_hash = freeze_labels(tmp_path / "labels-first.json", frozen_labels)
+    other_reviewer = replace(frozen_labels, review_resolutions=[
+        replace(resolution, reviewer="reviewer-b")])
+    second_hash = freeze_labels(tmp_path / "labels-second.json", other_reviewer)
+    assert first_hash != second_hash
