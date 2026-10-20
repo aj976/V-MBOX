@@ -167,6 +167,15 @@ one requires an explicit SCHEMA.md change before a metric can be reported.
 
 ## M8 — Experiments (L)
 
+**Development status (2026-10-20): offline aggregation implemented, experiment
+runs pending.** Per-run v2 results record tuning/held-out role. The v1 reader
+requires an explicit hashed role map and never rewrites old files. A canonical
+attempt manifest and derived `results.json` preserve failed-run accounting,
+paired trace comparisons, CI settings, and input hashes. The table renderer
+accepts only validated aggregates. The existing M6 data contain one independent
+trace, so CIs and comparison conclusions remain **not measured/inconclusive**.
+Live overhead, latency, crash, and held-out matrix work still require VM runs.
+
 **Tasks**
 - Run full matrix: scenarios × strategies × budgets × seeds (enough seeds for stable CIs)
 - Live runs for overhead and persistence latency (collector on/off, same workload)
@@ -182,6 +191,11 @@ one requires an explicit SCHEMA.md change before a metric can be reported.
 ---
 
 ## M9 — Trust and resilience tests (M)
+
+**Development status (2026-10-20): synthetic local probes implemented.**
+Pre-seal collector changes, full copied-chain rewrites, and missing host
+receipts are tested in `tests/test_m9_resilience.py`; their limits are recorded
+in `M9_LOCAL_PROBES.md`. Windows VM and second-VM anchor behavior are unverified.
 
 **Tasks**
 - Compromised-collector simulation: fabricated events, suppressed events, altered timestamps
