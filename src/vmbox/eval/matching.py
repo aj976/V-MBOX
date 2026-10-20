@@ -14,6 +14,7 @@ from vmbox.schema import (
     Event,
     GroundTruthLabel,
     MatchReview,
+    ReviewCandidate,
     ReviewResolution,
 )
 
@@ -85,7 +86,11 @@ def match_labels(labels: GroundTruthLabel, events: list[Event]) -> MatchResult:
             ids = [item.event_id for item in candidates]
             if resolution is not None and resolution.event_id not in ids:
                 raise ValueError("review resolution does not match current candidates")
-            ambiguous.append(AmbiguousMatch(step.step_id, ids, resolution))
+            summaries = [ReviewCandidate(item.event_id, item.seq, item.ts_ns,
+                                         item.event_type, item.process.image,
+                                         item.pid, item.ppid) for item in candidates
+                         if item.process is not None]
+            ambiguous.append(AmbiguousMatch(step.step_id, summaries, resolution))
             if resolution is None:
                 continue
             used_resolutions.add(step.step_id)

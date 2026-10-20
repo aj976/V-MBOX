@@ -356,20 +356,36 @@ class ReviewResolution(SchemaModel):
 
 
 @dataclass(frozen=True)
+class ReviewCandidate(SchemaModel):
+    event_id: str
+    seq: int
+    ts_ns: int
+    event_type: str
+    image: str
+    pid: int | None
+    ppid: int | None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.seq < 0 or self.ts_ns < 0 or not self.event_type or not self.image:
+            raise ValueError("invalid review candidate")
+
+
+@dataclass(frozen=True)
 class AmbiguousMatch(SchemaModel):
     step_id: str
-    candidate_event_ids: list[str]
+    candidates: list[ReviewCandidate]
     resolution: ReviewResolution | None
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if len(self.candidate_event_ids) < 2 or len(set(self.candidate_event_ids)) != len(
-            self.candidate_event_ids
+        if len(self.candidates) < 2 or len({item.event_id for item in self.candidates}) != len(
+            self.candidates
         ):
             raise ValueError("ambiguous match needs distinct candidates")
         if self.resolution is not None and (
             self.resolution.step_id != self.step_id
-            or self.resolution.event_id not in self.candidate_event_ids
+            or self.resolution.event_id not in {item.event_id for item in self.candidates}
         ):
             raise ValueError("review resolution must select a candidate")
 

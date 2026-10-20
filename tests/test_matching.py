@@ -102,7 +102,9 @@ def test_ambiguity_goes_to_review_and_review_is_frozen(tmp_path: Path):
     assert result.matched == {}
     assert result.blocked == {"s2"}
     assert result.collection_misses == set()
-    assert result.review.ambiguous[0].candidate_event_ids == [first.event_id, second.event_id]
+    assert [item.event_id for item in result.review.ambiguous[0].candidates] == [
+        first.event_id, second.event_id]
+    assert result.review.ambiguous[0].candidates[0].pid == 20
     path = tmp_path / "match_review.json"
     write_match_review(path, result.review)
     assert read_match_review(path) == result.review

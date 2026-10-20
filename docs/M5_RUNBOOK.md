@@ -28,7 +28,7 @@ After the trace and its `.sha256` sidecar exist, use these commands from the rep
 python .\scripts\m5_labels.py prepare --trace .\runs\family1_trace.jsonl --draft .\runs\family1_labels\labels.draft.json --review .\runs\family1_labels\match_review.json
 ```
 
-The command fails if the nonce marker is absent or duplicated. It writes `match_review.json` with every ambiguous step and its candidate event IDs. Inspect those candidates against the trace, then record each decision with who/when:
+The command fails if the nonce marker is absent or duplicated. It writes `match_review.json` with every ambiguous step and candidate event summaries (ID, sequence, time, image, PID, PPID). Inspect those candidates against the trace, then record each decision with who/when:
 
 ```powershell
 python .\scripts\m5_labels.py resolve --review .\runs\family1_labels\match_review.json --step-id s1 --event-id <candidate-event-id> --reviewer <your-name>
