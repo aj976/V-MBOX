@@ -51,6 +51,23 @@ def test_record_requires_anchor_config(capsys):
     assert "--anchor-endpoint" in capsys.readouterr().err
 
 
+def test_record_reports_missing_windows_dependency(tmp_path: Path, monkeypatch, capsys):
+    from vmbox.record import command
+
+    def missing(**kwargs):
+        raise ImportError("win32evtlog is unavailable")
+
+    monkeypatch.setattr(command, "record_sysmon", missing)
+    assert main([
+        "record", "--anchor-endpoint", "127.0.0.1:8765",
+        "--anchor-pubkey", str(tmp_path / "public.pem"),
+        "--anchor-auth-key", str(tmp_path / "auth.key"),
+        "--out", str(tmp_path / "evidence"), "--duration", "1",
+        "--budget-bytes", "9437184",
+    ]) == 2
+    assert "win32evtlog is unavailable" in capsys.readouterr().out
+
+
 def test_offline_verify_needs_no_anchor_crypto_dependency(tmp_path: Path):
     offline = replace(manifest(), mode="offline_eval", anchor=None)
     write_manifest(tmp_path / "manifest.json", offline)

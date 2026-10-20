@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
                 anchor_pubkey=args.anchor_pubkey,
                 anchor_auth_key=args.anchor_auth_key, trace_path=args.tee_raw,
             )
-        except (OSError, ValueError, RuntimeError) as exc:
+        except (ImportError, OSError, ValueError, RuntimeError) as exc:
             print(f"record failed: {exc}; existing output, if any, is incomplete")
             return 2
         print(f"trace_hash: {digest}")

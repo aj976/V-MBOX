@@ -48,13 +48,14 @@ vmbox verify     # check stored evidence against the chain and anchor receipts
 vmbox recover    # inspect surviving evidence after a crash
 vmbox timeline   # reconstruct a timeline
 vmbox report     # generate the forensic report
-scripts/m5_eval.py / m6_eval.py / m8_aggregate.py  # replay and aggregate
+scripts/m5_eval.py / m6_eval.py / m8_matrix.py / m8_aggregate.py  # replay and aggregate
 ```
 
 Install from a fresh clone with Python 3.11+ using `python -m pip install -e .`.
 Run unit checks with `python -m pytest -q`. See `M1_RUNBOOK.md` for telemetry,
 `M5_RUNBOOK.md` through `M8_RUNBOOK.md` for frozen-label replay and derived
-results, and `LIVE_RUNBOOK.md` for the two-VM recorder/anchor commands. Every
+results, `LIVE_RUNBOOK.md` for the two-VM recorder/anchor commands, and
+`M10_STATUS.md` for remaining acceptance work. Every
 evidence output directory and result file is write-once; choose fresh names
 for retries. Existing VM results remain on the operator's VM unless explicitly
 archived and sanitized. Do not commit raw traces, keys, or unsanitized host data.
