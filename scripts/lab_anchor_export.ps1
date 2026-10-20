@@ -4,6 +4,8 @@
 param(
     [string]$LabRoot = 'C:\VmboxLab\479a15e7-d7a17fe0',
     [string]$Trial = '89982d6f',
+    [string]$EvidencePath,
+    [string]$ExportPath,
     [string]$MonitoredAddress = '192.168.189.128',
     [string]$AnchorAddress = '192.168.189.129',
     [string]$MonitoredUser = 'ajjj\vmboxlab',
@@ -12,9 +14,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if ($Trial -notmatch '^[0-9a-f]{8}$') { throw 'Trial must be eight lowercase hex characters.' }
-$evidence = Join-Path $LabRoot "live_$Trial"
+$evidence = if ($EvidencePath) { $EvidencePath } else { Join-Path $LabRoot "live_$Trial" }
 $ledger = Join-Path $LabRoot "anchor_ledger_$Trial"
-$export = Join-Path $LabRoot "anchor_export_$Trial"
+$export = if ($ExportPath) { $ExportPath } else { Join-Path $LabRoot "anchor_export_$Trial" }
+$evidence = [IO.Path]::GetFullPath($evidence).TrimEnd('\')
+$export = [IO.Path]::GetFullPath($export).TrimEnd('\')
+if ($export.Equals($evidence, [StringComparison]::OrdinalIgnoreCase) -or
+    $export.StartsWith($evidence + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Anchor export cannot be inside the write-once evidence directory.'
+}
 $monitoredCredential = Get-Credential -UserName $MonitoredUser -Message 'Monitored VM lab password'
 if ($null -eq $monitoredCredential) { throw 'Credential prompt cancelled.' }
 $sessions = @()

@@ -76,6 +76,24 @@ def test_receipt_chain_and_anchor_tail(tmp_path):
     assert result.status == "tampered"
 
 
+def test_no_host_receipts_reports_no_anchored_range(tmp_path):
+    key = Ed25519PrivateKey.generate()
+    session = str(uuid4())
+    manifest = _manifest(session, public_key_fingerprint(key.public_key()))
+    chain = ChainVerification("ok", None, [
+        ChainEntry(0, "segment", "sha256:" + "a" * 64, 1)
+    ], "")
+    host_only = verify_receipts(manifest, chain, key.public_key(), tmp_path / "host")
+    assert host_only.status == "ok"
+    assert host_only.anchored_through == -1
+    assert host_only.reason == "no host receipts; unconfirmed against anchor state"
+    exported = verify_receipts(manifest, chain, key.public_key(), tmp_path / "host",
+                               tmp_path / "anchor")
+    assert exported.status == "ok"
+    assert exported.reason == ("no receipts in host or anchor export; "
+                               "confirmed against anchor state")
+
+
 def test_wrong_key_swapped_signature_and_tampered_field(tmp_path):
     key = Ed25519PrivateKey.generate()
     wrong = Ed25519PrivateKey.generate()

@@ -89,6 +89,9 @@ def verify_receipts(manifest: SessionManifest, chain: ChainVerification,
             return ReceiptVerification("tampered", "receipt seq_end mismatch", -1)
     through = len(host) - 1
     if anchor is None:
+        if through < 0:
+            return ReceiptVerification("ok", "no host receipts; "
+                                       "unconfirmed against anchor state", through)
         return ReceiptVerification("ok", f"anchored through anchor_seq {through}; "
                                    "unconfirmed against anchor state", through)
     if host != anchor[:len(host)]:
@@ -98,5 +101,8 @@ def verify_receipts(manifest: SessionManifest, chain: ChainVerification,
                                    f"anchor has {len(anchor) - 1}", through)
     if len(host) > len(anchor):
         return ReceiptVerification("tampered", "host receipt log exceeds anchor export", through)
+    if through < 0:
+        return ReceiptVerification("ok", "no receipts in host or anchor export; "
+                                   "confirmed against anchor state", through)
     return ReceiptVerification("ok", f"anchored through anchor_seq {through}; "
                                "confirmed against anchor state", through)
