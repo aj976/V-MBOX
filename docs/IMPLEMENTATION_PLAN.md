@@ -118,11 +118,11 @@ M5 can start in parallel with M3–M4 but labels must freeze before M6 tuning.
 ## M6 — Selection strategies (L)
 
 **Development status (2026-10-20): in progress.** The first offline selector slice implements
-FIFO, fixed allow-list, static priority, and a same-PID memory/network context window under
-frozen rule tag `m6-general-v1`. Synthetic harness tests exercise four equal total budgets.
-This is not M6 exit: target-PID activity and broader lineage promotion, multi-segment
-priority-aware eviction/context protection, and real-trace comparisons remain. The selector
-currently writes one sealed segment per replay, so the priority-eviction rule is not yet tested.
+FIFO, fixed allow-list, static priority, and context promotion under frozen rule tag
+`m6-general-v2`. The v2 tag adds target-PID activity and direct child inheritance to v1.
+Synthetic harness tests exercise four equal total budgets. Priority-aware eviction is tested
+in the segment store. This is not M6 exit: multi-segment replay with context protection and
+real-trace comparisons remain. The harness currently writes one sealed segment per replay.
 
 **Tasks**
 - Strategy interface; baselines (unbounded, FIFO ring)
