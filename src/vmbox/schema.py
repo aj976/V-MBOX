@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, fields
 from hashlib import sha256
+from math import isfinite
 from typing import Any, Literal, TypeVar, get_args, get_origin, get_type_hints
 from uuid import UUID, uuid5
 
@@ -378,6 +379,13 @@ class MatchReview(SchemaModel):
     run_id: str
     ambiguous: list[AmbiguousMatch]
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.run_id or len({item.step_id for item in self.ambiguous}) != len(
+            self.ambiguous
+        ):
+            raise ValueError("invalid review run or duplicate step")
+
 
 @dataclass(frozen=True)
 class GroundTruthLabel(SchemaModel):
@@ -397,7 +405,10 @@ class GroundTruthLabel(SchemaModel):
         for step in self.steps:
             if not step.step_id or step.step_id in seen:
                 raise ValueError("duplicate or empty step_id")
-            if step.match.pid_lineage is not None and step.match.pid_lineage.step_id not in seen:
+            if step.step_id == "anchor":
+                raise ValueError("anchor is a reserved step_id")
+            if (step.match.pid_lineage is not None
+                    and step.match.pid_lineage.step_id not in seen | {"anchor"}):
                 raise ValueError("PID lineage must reference an earlier step")
             seen.add(step.step_id)
         reviewed: set[str] = set()
@@ -468,9 +479,10 @@ class EvaluationResult(SchemaModel):
     run_id: str
     scenario_id: str
     seed: int
-    strategy: str
-    budget_bytes: int
+    strategy: Literal["unbounded", "fixed", "priority", "context_aware", "fifo_ring"]
+    budget_bytes: int | None
     budget_fraction_of_full: float | None
+    bytes_retained: int | None
     trace_hash: str
     label_hash: str
     config_hash: str
@@ -482,7 +494,15 @@ class EvaluationResult(SchemaModel):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if self.seed < 0 or self.budget_bytes < 0:
+        if self.seed < 0:
             raise ValueError("negative seed or budget")
-        if self.budget_fraction_of_full is not None and not 0 <= self.budget_fraction_of_full <= 1:
-            raise ValueError("budget fraction out of range")
+        if self.strategy == "unbounded":
+            if self.budget_bytes is not None or self.budget_fraction_of_full is not None:
+                raise ValueError("unbounded strategy has no budget or fraction")
+        elif (self.budget_bytes is None or self.budget_bytes < 0
+              or self.budget_fraction_of_full is None
+              or not isfinite(self.budget_fraction_of_full)
+              or self.budget_fraction_of_full < 0):
+            raise ValueError("budgeted strategy requires nonnegative budget and fraction")
+        if self.bytes_retained is not None and self.bytes_retained < 0:
+            raise ValueError("negative retained bytes")

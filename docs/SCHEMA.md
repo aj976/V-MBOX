@@ -218,7 +218,7 @@ An optional anchor-side export is a copy of the anchor's `receipts/` tree. The v
 
 `ts_window_ns` is `[start_offset_ns, end_offset_ns]`: integer nanosecond offsets, inclusive, relative to the unique anchor event's `ts_ns` (`t0`). The scenario runner starts each run by launching a marker with a per-run nonce in its image name and records that nonce in `anchor`. The matcher requires exactly one trace event with the anchor `event_type`, `image_regex`, and nonce in its process image. Zero or multiple anchors are hard errors; the run is unlabeled. Raw command-line content is not required. Windows and their stated tolerance are chosen from the scenario script's intended timing before any strategy is run. After freeze, changing a window creates a new label version.
 
-Step identity is `event_type` **and** `image_regex`, plus `pid_lineage` where relevant; time only narrows candidates. `pid_lineage` is either `null` or `{ "step_id": "earlier_step", "relation": "same_pid" }` / `{ "step_id": "earlier_step", "relation": "child_of" }`. The first relation compares event PIDs; the second compares the candidate's PPID to the earlier matched event's PID. A lineage-dependent step cannot resolve until its parent step has a unique match or a reviewed resolution. Missing attack steps are collection misses, not selection misses.
+Step identity is `event_type` **and** `image_regex`, plus `pid_lineage` where relevant; time only narrows candidates. `pid_lineage` is either `null` or `{ "step_id": "earlier_step", "relation": "same_pid" }` / `{ "step_id": "earlier_step", "relation": "child_of" }`. The reserved `step_id` `anchor` refers to the unique marker event. The first relation compares event PIDs; the second compares the candidate's PPID to the earlier matched event's PID. A lineage-dependent step cannot resolve until its parent step has a unique match or a reviewed resolution. Missing attack steps are collection misses, not selection misses.
 
 If multiple candidates remain, the matcher writes `match_review.json` with `run_id`, `ambiguous` entries (`step_id`, `candidate_event_ids`, `resolution`). A resolution is `null` until manual review, then `{ "step_id": "s1", "event_id": "uuid", "reviewer": "name", "reviewed_ts_ns": 123 }`. The reviewer and timestamp are required; each resolved event ID must be one of the listed candidates. Before freezing `labels.json`, copy final resolutions to its required `review_resolutions` array, so the label hash covers the review decisions. `match_review.json` is a pre-freeze workpaper; once labels are frozen, any review or window change creates a new label version. The label example above is a template, not a measurement.
 
@@ -229,7 +229,8 @@ Template, not a measurement. `null` metrics mean "not measured". A result is inv
 ```json
 {
   "run_id": "uuid", "scenario_id": "example", "seed": 0,
-  "strategy": "context_aware", "budget_bytes": 0, "budget_fraction_of_full": null,
+  "strategy": "unbounded", "budget_bytes": null, "budget_fraction_of_full": null,
+  "bytes_retained": null,
   "trace_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "label_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "config_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -254,4 +255,4 @@ Template, not a measurement. `null` metrics mean "not measured". A result is inv
 }
 ```
 
-The zero seed and budget in this template are structural examples, not run measurements. The all-zero hashes and commit are template tokens; a real result must replace them with recorded provenance. All measured numbers come from runs.
+`strategy` is exactly one of `unbounded`, `fixed`, `priority`, `context_aware`, `fifo_ring`. For `unbounded`, both `budget_bytes` and `budget_fraction_of_full` are `null`; for every other strategy both are required and the budget is nonnegative. `bytes_retained` is required for all strategies and is `null` until measured, then a nonnegative integer. The *full size* for one trace is the `bytes_retained` of its unbounded run using the same serialization. A budgeted result computes `budget_fraction_of_full = budget_bytes / full_size`; a zero or unmeasured full size makes that comparison unavailable, never zero or infinity. Fractions above 1 are valid when a budget exceeds full size. Tables and plots show `n/a (unbounded)` for the unbounded fraction and use it as a reference line, never as a competing strategy. The zero seed in this template is structural, not a run measurement. The all-zero hashes and commit are template tokens; a real result must replace them with recorded provenance. All measured numbers come from runs.

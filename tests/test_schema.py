@@ -62,6 +62,30 @@ def test_null_metrics_mean_unmeasured():
     assert result.metrics.persistence_latency_ms.p95 is None
 
 
+def test_unbounded_budget_null_round_trip_and_budgeted_validation():
+    template = examples()[-1]
+    unbounded = EvaluationResult.from_dict(template)
+    assert unbounded.budget_bytes is None
+    assert unbounded.budget_fraction_of_full is None
+    assert unbounded.bytes_retained is None
+    assert EvaluationResult.from_dict(json.loads(unbounded.to_json())) == unbounded
+    for changes in ({"budget_bytes": 1}, {"budget_fraction_of_full": 0.5}):
+        with pytest.raises(ValueError):
+            EvaluationResult.from_dict({**template, **changes})
+    for changes in ({"budget_bytes": None, "budget_fraction_of_full": 0.5},
+                    {"budget_bytes": -1, "budget_fraction_of_full": 0.5},
+                    {"budget_bytes": 1, "budget_fraction_of_full": None}):
+        with pytest.raises(ValueError):
+            EvaluationResult.from_dict({**template, "strategy": "fixed", **changes})
+    with pytest.raises(ValueError):
+        EvaluationResult.from_dict({**template, "strategy": "typo"})
+    budgeted = EvaluationResult.from_dict({**template, "strategy": "fifo_ring",
+                                           "budget_bytes": 256,
+                                           "budget_fraction_of_full": 0.25,
+                                           "bytes_retained": 200})
+    assert EvaluationResult.from_dict(json.loads(budgeted.to_json())) == budgeted
+
+
 def test_canonical_output_is_byte_identical_across_processes():
     obj = {"é": [1, 2], "ts_ns": 1760000000123456789, "a": None}
     expected = canonical_json(obj)
