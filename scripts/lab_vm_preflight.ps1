@@ -44,6 +44,7 @@ try {
             Select-Object -First 1
         $pythonVersion = $null
         $pythonIssue = $null
+        $runtimeImports = $null
         if ($null -eq $pythonPath) {
             $pythonIssue = 'Python not found in checkout, known per-user installation, or remote account PATH'
         }
@@ -52,6 +53,11 @@ try {
                 $versionOutput = @(& $pythonPath --version 2>&1)
                 if ($LASTEXITCODE -eq 0 -and $versionOutput.Count -gt 0) {
                     $pythonVersion = [string]$versionOutput[0]
+                    $importOutput = @(& $pythonPath -c 'import vmbox, cryptography, psutil, win32evtlog' 2>&1)
+                    $runtimeImports = ($LASTEXITCODE -eq 0)
+                    if (-not $runtimeImports) {
+                        $pythonIssue = (@($importOutput | Select-Object -First 2) -join '; ')
+                    }
                 }
                 else { $pythonIssue = 'Python executable exists but did not start successfully' }
             }
@@ -78,7 +84,8 @@ try {
                     $dirty = ($rawStatus.Count -ne 0)
                 }
                 else {
-                    $gitIssue = 'git status failed'
+                    $gitIssue = 'git status failed: ' +
+                        (@($rawStatus | Select-Object -First 2) -join '; ')
                 }
             }
             else {
@@ -99,6 +106,7 @@ try {
             python_executable = $pythonPath
             python = $pythonVersion
             python_issue = $pythonIssue
+            runtime_imports = $runtimeImports
             sysmon_version = if ($null -eq $sysmon) { $null } else { (Get-Item $sysmon.Source).VersionInfo.ProductVersion }
             winrm = (Get-Service WinRM).Status.ToString()
         }
