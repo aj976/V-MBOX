@@ -179,7 +179,8 @@ one requires an explicit SCHEMA.md change before a metric can be reported.
 ## M8 — Experiments (L)
 
 **Development status (2026-10-20): offline aggregation implemented, experiment
-runs pending.** Per-run v2 results record tuning/held-out role. The v1 reader
+runs pending.** A write-once equal-budget matrix runner is available for each
+new independent frozen trace. Per-run v2 results record tuning/held-out role. The v1 reader
 requires an explicit hashed role map and never rewrites old files. A canonical
 attempt manifest and derived `results.json` preserve failed-run accounting,
 paired trace comparisons, CI settings, and input hashes. The table renderer
