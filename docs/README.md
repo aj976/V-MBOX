@@ -55,7 +55,8 @@ Install from a fresh clone with Python 3.11+ using `python -m pip install -e .`.
 Run unit checks with `python -m pytest -q`. See `M1_RUNBOOK.md` for telemetry,
 `M5_RUNBOOK.md` through `M8_RUNBOOK.md` for frozen-label replay and derived
 results, `LIVE_RUNBOOK.md` for the two-VM recorder/anchor commands, and
-`M10_STATUS.md` for remaining acceptance work. Every
+`M10_STATUS.md` for remaining acceptance work, and `M10_WRITEUP.md` for the
+architecture, methodology, and source-backed related work. Every
 evidence output directory and result file is write-once; choose fresh names
 for retries. Existing VM results remain on the operator's VM unless explicitly
 archived and sanitized. Do not commit raw traces, keys, or unsanitized host data.

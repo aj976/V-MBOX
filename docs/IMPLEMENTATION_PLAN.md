@@ -223,6 +223,12 @@ in `M9_LOCAL_PROBES.md`. Windows VM and second-VM anchor behavior are unverified
 
 ## M10 — Documentation and writeup (M)
 
+**Development status (2026-10-20):** architecture, method, related-work
+distinctions, reproducibility status, and limitations are drafted in
+`M10_WRITEUP.md` and `M10_STATUS.md`. A final results discussion is pending
+independent held-out traces and live/tamper validation; no missing metric is
+filled from a synthetic probe.
+
 **Tasks**
 - Final threat model, architecture, related work (memory forensics, Windows telemetry, tamper-evident logging, forward-secure logging literature), methodology, results, limitations
 - README quick start with real commands and real results
