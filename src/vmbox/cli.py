@@ -13,9 +13,31 @@ from vmbox.store.manifest import read_manifest
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vmbox")
     subcommands = parser.add_subparsers(dest="command", required=True)
-    record = subcommands.add_parser("record", help="live recording (not yet implemented)")
-    record.add_argument("--anchor-endpoint")
-    record.add_argument("--anchor-pubkey", type=Path)
+    record = subcommands.add_parser("record", help="record Sysmon events on the lab VM")
+    record.add_argument("--anchor-endpoint", required=True)
+    record.add_argument("--anchor-pubkey", type=Path, required=True)
+    record.add_argument("--anchor-auth-key", type=Path, required=True)
+    record.add_argument("--out", type=Path, required=True)
+    record.add_argument("--duration", type=float, required=True)
+    record.add_argument("--strategy", choices=("fifo_ring", "fixed", "priority",
+                                               "context_aware"), default="context_aware")
+    record.add_argument("--budget-bytes", type=int, required=True)
+    record.add_argument("--journal-bytes", type=int, default=8 * 1024 * 1024)
+    record.add_argument("--segment-events", type=int, default=128)
+    record.add_argument("--queue-capacity", type=int, default=10000)
+    record.add_argument("--sysmon-config", type=Path, default=Path("docs/sysmon.xml"))
+    record.add_argument("--tee-raw", type=Path)
+    keygen = subcommands.add_parser("anchor-keygen", help="create anchor-only keys")
+    keygen.add_argument("--out", type=Path, required=True)
+    anchor = subcommands.add_parser("anchor", help="serve signed checkpoints")
+    anchor.add_argument("--listen", required=True)
+    anchor.add_argument("--key", type=Path, required=True)
+    anchor.add_argument("--auth-key", type=Path, required=True)
+    anchor.add_argument("--store", type=Path, required=True)
+    sync = subcommands.add_parser("anchor-sync", help="retry pending signed checkpoints")
+    sync.add_argument("--evidence", type=Path, required=True)
+    sync.add_argument("--anchor-pubkey", type=Path, required=True)
+    sync.add_argument("--anchor-auth-key", type=Path, required=True)
     verify = subcommands.add_parser("verify", help="verify local chain and journal integrity")
     verify.add_argument("--evidence", type=Path, required=True)
     verify.add_argument("--anchor-pubkey", type=Path)
@@ -36,10 +58,77 @@ def main(argv: list[str] | None = None) -> int:
     report.add_argument("--anchor-pubkey", type=Path)
     report.add_argument("--anchor-receipts", type=Path)
     args = parser.parse_args(argv)
+    if args.command == "anchor-keygen":
+        from vmbox.anchor.keys import create_anchor_keys
+
+        try:
+            fingerprint = create_anchor_keys(args.out)
+        except (OSError, ValueError) as exc:
+            print(f"anchor key generation failed: {exc}")
+            return 2
+        print(f"public_key_fingerprint: {fingerprint}")
+        print("keep private.pem on the anchor VM only; copy public.pem and auth.key "
+              "to the monitored VM through an isolated channel")
+        return 0
+    if args.command == "anchor":
+        from vmbox.anchor.keys import load_private_key
+        from vmbox.anchor.ledger import AnchorLedger
+        from vmbox.anchor.transport import read_auth_key, serve_anchor
+
+        try:
+            private = load_private_key(args.key)
+            secret = read_auth_key(args.auth_key)
+            server = serve_anchor(args.listen, AnchorLedger(args.store, private), secret)
+            print(f"anchor_listening: {args.listen}", flush=True)
+            with server:
+                server.serve_forever()
+        except KeyboardInterrupt:
+            return 0
+        except (OSError, ValueError) as exc:
+            print(f"anchor failed: {exc}")
+            return 2
+        return 0
+    if args.command == "anchor-sync":
+        from vmbox.anchor.client import sync_receipts
+        from vmbox.anchor.receipt_crypto import load_public_key
+        from vmbox.anchor.transport import read_auth_key
+
+        try:
+            manifest = read_manifest(args.evidence / "manifest.json")
+            result = sync_receipts(args.evidence, manifest,
+                                   load_public_key(args.anchor_pubkey),
+                                   read_auth_key(args.anchor_auth_key))
+        except (OSError, ValueError) as exc:
+            print(f"anchor sync failed: {exc}")
+            return 2
+        print(f"anchored_segments: {result.anchored_segments}")
+        print(f"pending_segments: {result.pending_segments}")
+        if result.outage is not None:
+            print(f"anchor outage: {result.outage}")
+        return 3 if result.pending_segments else 0
     if args.command == "record":
-        if not args.anchor_endpoint or args.anchor_pubkey is None:
-            parser.error("live record requires --anchor-endpoint and --anchor-pubkey")
-        parser.error("live recording is not implemented; unverified until run on Windows VM")
+        from vmbox.record.command import record_sysmon
+
+        try:
+            digest, seen, overflow, pending = record_sysmon(
+                output=args.out, duration_s=args.duration,
+                strategy_name=args.strategy, budget_bytes=args.budget_bytes,
+                journal_bytes=args.journal_bytes, segment_events=args.segment_events,
+                queue_capacity=args.queue_capacity,
+                sysmon_config=args.sysmon_config,
+                anchor_endpoint=args.anchor_endpoint,
+                anchor_pubkey=args.anchor_pubkey,
+                anchor_auth_key=args.anchor_auth_key, trace_path=args.tee_raw,
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            print(f"record failed: {exc}; existing output, if any, is incomplete")
+            return 2
+        print(f"trace_hash: {digest}")
+        print(f"events_seen: {seen}")
+        print(f"collector_queue_overflow: {overflow}")
+        print(f"anchor_pending_segments: {pending}")
+        print("sysmon_upstream_lost: not measured")
+        return 3 if pending or overflow else 0
     if args.command == "report":
         from vmbox.reconstruct.report import build_report, write_report
 

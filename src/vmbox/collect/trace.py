@@ -3,7 +3,7 @@
 import json
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -110,7 +110,8 @@ def _sanitize(raw: RawEvent, header: TraceHeader, receipt_ts_ns: int) -> TraceRe
 
 
 def write_trace(path: Path, header: TraceHeader, events: Iterable[RawEvent],
-                *, receipt_clock: Any = time_ns) -> str:
+                *, receipt_clock: Any = time_ns,
+                on_record: Callable[[TraceRecord], None] | None = None) -> str:
     """Write once. Missing sidecar after interruption means an incomplete trace."""
     if header.raw_cmdline_opt_in and not path.name.endswith(".local.jsonl"):
         raise ValueError("raw command lines require a .local.jsonl trace")
@@ -123,9 +124,12 @@ def write_trace(path: Path, header: TraceHeader, events: Iterable[RawEvent],
         stream.write(header_line)
         digest.update(header_line)
         for raw in events:
-            line = _line(_sanitize(raw, header, receipt_clock()))
+            record = _sanitize(raw, header, receipt_clock())
+            line = _line(record)
             stream.write(line)
             digest.update(line)
+            if on_record is not None:
+                on_record(record)
         stream.flush()
         os.fsync(stream.fileno())
     result = "sha256:" + digest.hexdigest()

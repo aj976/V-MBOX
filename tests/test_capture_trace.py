@@ -65,3 +65,23 @@ def test_source_stop_failure_leaves_trace_incomplete(tmp_path: Path):
     assert not Path(str(path) + ".sha256").exists()
     with pytest.raises(ValueError, match="incomplete"):
         read_trace(path)
+
+
+def test_live_callback_and_replay_have_identical_normalized_bytes(tmp_path: Path):
+    from vmbox.collect.capture import make_sysmon_header
+
+    header = make_sysmon_header(b"config", "boot", "synthetic", 4)
+    live = Normalizer(header)
+    live_bytes: list[bytes] = []
+    path = tmp_path / "trace.jsonl"
+    capture_sysmon_trace(
+        path, FakeSysmon(), duration_s=0.001, sysmon_config=b"config",
+        boot_id="boot", windows_build="synthetic", queue_capacity=4,
+        receipt_clock=lambda: 100, header=header, emit_lifecycle=True,
+        on_record=lambda record: live_bytes.append(live.normalize(record).to_json()),
+    )
+    saved_header, records = read_trace(path)
+    replay = Normalizer(saved_header)
+    assert live_bytes == [replay.normalize(record).to_json() for record in records]
+    assert [record.event_type for record in records] == [
+        "COLLECTOR_START", "PROC_START", "PROC_START", "COLLECTOR_STOP"]

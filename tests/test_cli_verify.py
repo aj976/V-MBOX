@@ -48,7 +48,7 @@ def test_offline_verify_cannot_claim_anchor(tmp_path: Path, capsys):
 def test_record_requires_anchor_config(capsys):
     with pytest.raises(SystemExit):
         main(["record"])
-    assert "live record requires" in capsys.readouterr().err
+    assert "--anchor-endpoint" in capsys.readouterr().err
 
 
 def test_offline_verify_needs_no_anchor_crypto_dependency(tmp_path: Path):
