@@ -15,6 +15,19 @@ VM. It creates a separate, expiring local `vmboxlab` administrator account for
 the isolated lab; the preflight uses that account by default. The account is
 removed after testing with `scripts/lab_remote_account.ps1 -Remove` on each VM.
 
+If preflight shows that `vmboxlab` can run Python but cannot import the
+project packages, or Git cannot read the cloned OneDrive checkout, run
+`scripts/lab_vm_prepare.ps1` on the laptop. It prompts for the two lab-account
+passwords locally, clones the same pinned Git revision into a new
+`C:\VmboxLab\<revision>-<random>\repo` directory on each VM, and installs a
+virtual environment beside it. The monitored VM gets the Windows collector
+extras; the anchor VM gets the base package. The script never replaces an
+existing lab directory. Keep its printed `lab_root`, checkout, and Python paths
+for the live-test commands below; use those paths instead of the OneDrive
+checkout or a bare `python` command. If setup fails, the partial directory is
+left visible and a retry gets a new name. This preparation does not generate
+evidence or anchor keys.
+
 On the **anchor VM**, clone the repository and install the project as in
 `README.md`. Create keys once and start the listener on the IP of its isolated
 VM network adapter (substitute the real address):
