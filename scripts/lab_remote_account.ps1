@@ -29,7 +29,7 @@ if ($remotePolicy -ne 1) {
 $password = Read-Host "Choose a strong password for $env:COMPUTERNAME\$account" -AsSecureString
 $expires = (Get-Date).AddDays(14)
 New-LocalUser -Name $account -Password $password -AccountExpires $expires `
-    -Description 'Temporary V-MBOX isolated-lab remote test account' | Out-Null
+    -Description 'Temporary V-MBOX lab remote account' | Out-Null
 try {
     Add-LocalGroupMember -Group Administrators -Member $account
 }
