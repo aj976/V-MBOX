@@ -26,7 +26,7 @@ try {
     $anchorSession = New-PSSession -ComputerName $AnchorAddress -Credential $anchorCredential -Authentication Negotiate
     $sessions += $anchorSession
 
-    $sessionId = Invoke-Command -Session $monitoredSession -ArgumentList $evidence -ScriptBlock {
+    $sessionId = [string](Invoke-Command -Session $monitoredSession -ArgumentList $evidence -ScriptBlock {
         param($Evidence)
         $manifestPath = Join-Path $Evidence 'manifest.json'
         if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
@@ -38,7 +38,7 @@ try {
             throw 'Manifest is not a valid live session.'
         }
         [string]$manifest.session_id
-    }
+    })
     $files = @(Invoke-Command -Session $anchorSession -ArgumentList $ledger, $sessionId -ScriptBlock {
         param($Ledger, $SessionId)
         $directory = Join-Path (Join-Path $Ledger 'receipts') $SessionId
@@ -57,7 +57,7 @@ try {
         }
     })
     if ($files.Count -eq 0) { throw 'Anchor receipt directory is empty.' }
-    $copied = Invoke-Command -Session $monitoredSession -ArgumentList $export, $sessionId, $files -ScriptBlock {
+    $copied = [int](Invoke-Command -Session $monitoredSession -ArgumentList $export, $sessionId, $files -ScriptBlock {
         param($Export, $SessionId, $Files)
         if (Test-Path -LiteralPath $Export) {
             throw 'Anchor export path already exists; refusing to overwrite it.'
@@ -74,7 +74,7 @@ try {
             if ($actual -ne $file.sha256) { throw "Receipt transfer hash mismatch: $($file.name)" }
         }
         $Files.Count
-    }
+    })
     [PSCustomObject]@{
         session_id = $sessionId
         anchor_receipts = $files.Count
