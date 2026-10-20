@@ -11,7 +11,12 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from vmbox.schema import Event
-from vmbox.store.journal import append_journal, create_journal, recover_journal
+from vmbox.store.journal import (
+    append_journal,
+    append_journal_many,
+    create_journal,
+    recover_journal,
+)
 
 
 def event(seq: int) -> Event:
@@ -77,6 +82,38 @@ def test_journal_rejects_frame_larger_than_ring(tmp_path: Path):
     create_journal(path, 128)
     with pytest.raises(ValueError, match="exceeds"):
         append_journal(path, event(0))
+
+
+@pytest.mark.parametrize("capacity", [2048, 8192])
+def test_batch_append_matches_single_append_across_wrap(tmp_path: Path, capacity: int):
+    individual = tmp_path / "individual.bin"
+    batch = tmp_path / "batch.bin"
+    create_journal(individual, capacity)
+    create_journal(batch, capacity)
+    events = [event(seq) for seq in range(80)]
+    for item in events:
+        append_journal(individual, item)
+    append_journal_many(batch, iter(events))
+    assert batch.read_bytes() == individual.read_bytes()
+    assert recover_journal(batch) == recover_journal(individual)
+
+
+def test_batch_validates_existing_ring_once(tmp_path: Path, monkeypatch):
+    import vmbox.store.journal as journal
+
+    path = tmp_path / "journal.bin"
+    create_journal(path, 8192)
+    original_scan = journal._scan
+    scans = 0
+
+    def counted_scan(stream, cursor, data_size):
+        nonlocal scans
+        scans += 1
+        return original_scan(stream, cursor, data_size)
+
+    monkeypatch.setattr(journal, "_scan", counted_scan)
+    append_journal_many(path, (event(seq) for seq in range(80)))
+    assert scans == 1
 
 
 @pytest.mark.parametrize("tail", [5, 10])

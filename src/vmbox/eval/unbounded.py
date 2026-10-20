@@ -22,7 +22,7 @@ from vmbox.schema import (
     ToolVersions,
 )
 from vmbox.store.budget import retained_bytes
-from vmbox.store.journal import append_journal, create_journal, recover_journal
+from vmbox.store.journal import append_journal_many, create_journal, recover_journal
 from vmbox.store.manifest import write_manifest
 from vmbox.store.segment import SelectionStats, encode_segment, seal_segment
 
@@ -68,8 +68,7 @@ def run_unbounded(trace_path: Path, labels_path: Path, output_dir: Path, *,
     write_manifest(output_dir / "manifest.json", manifest)
     journal_path = output_dir / "journal.bin"
     create_journal(journal_path, journal_bytes)
-    for event in events:
-        append_journal(journal_path, event)
+    append_journal_many(journal_path, events)
     seal_segment(output_dir / "seg_00000000.vseg", index=0, events=events,
                  prev_hash="sha256:" + manifest_genesis(manifest).hex(),
                  strategy="unbounded", selection_stats=stats)

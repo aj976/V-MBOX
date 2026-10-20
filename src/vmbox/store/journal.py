@@ -6,6 +6,7 @@ import json
 import os
 import struct
 import zlib
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import BinaryIO
@@ -157,10 +158,12 @@ def _advance_oldest(stream: BinaryIO, cursor: _Cursor, data_size: int) -> _Curso
                    evicted_frames=cursor.evicted_frames + (event is not None))
 
 
-def append_journal(path: Path, event: Event) -> int:
-    """Append canonical event and return the cumulative ring-eviction count."""
-    payload = event.to_json()
-    frame = _FRAME.pack(len(payload), zlib.crc32(payload)) + payload
+def append_journal_many(path: Path, events: Iterable[Event]) -> int:
+    """Append a stream while validating the existing ring only once.
+
+    Every frame and cursor is still flushed in the documented order. Recovery
+    revalidates the entire live window; no cached state is trusted across calls.
+    """
     with path.open("r+b") as stream:
         stream.seek(0, os.SEEK_END)
         data_size = stream.tell() - _CONTROL_SIZE
@@ -168,48 +171,58 @@ def append_journal(path: Path, event: Event) -> int:
         recovered = _scan(stream, cursor, data_size)
         if recovered.incomplete_reason is not None:
             raise ValueError("cannot append to incomplete journal")
-        if recovered.events and (event.session_id != recovered.events[-1].session_id
-                                 or event.seq <= recovered.events[-1].seq):
-            raise ValueError("journal events must have ascending seq in one session")
-        if len(frame) >= data_size:
-            raise ValueError("event frame exceeds journal capacity")
-        while True:
-            if cursor.used_bytes == 0:
-                cursor = replace(cursor, oldest_offset=0, write_offset=0)
-            tail = data_size - cursor.write_offset
-            free = data_size - cursor.used_bytes
-            if cursor.used_bytes == 0:
-                padding = 0
-                break
-            if cursor.write_offset < cursor.oldest_offset:
-                if len(frame) < cursor.oldest_offset - cursor.write_offset:
+        last = recovered.events[-1] if recovered.events else None
+        for event in events:
+            if last is not None and (event.session_id != last.session_id
+                                     or event.seq <= last.seq):
+                raise ValueError("journal events must have ascending seq in one session")
+            payload = event.to_json()
+            frame = _FRAME.pack(len(payload), zlib.crc32(payload)) + payload
+            if len(frame) >= data_size:
+                raise ValueError("event frame exceeds journal capacity")
+            while True:
+                if cursor.used_bytes == 0:
+                    cursor = replace(cursor, oldest_offset=0, write_offset=0)
+                tail = data_size - cursor.write_offset
+                free = data_size - cursor.used_bytes
+                if cursor.used_bytes == 0:
                     padding = 0
                     break
-            elif len(frame) <= tail and len(frame) < free:
-                padding = 0
-                break
-            elif len(frame) > tail and tail + len(frame) < free:
-                padding = tail
-                break
-            cursor = _advance_oldest(stream, cursor, data_size)
-        if padding:
-            stream.seek(_CONTROL_SIZE + cursor.write_offset)
-            if padding >= _FRAME.size:
-                stream.write(_FRAME.pack(0, 0))
-                stream.write(bytes(padding - _FRAME.size))
-            else:
-                stream.write(bytes(padding))
-        write_offset = (cursor.write_offset + padding) % data_size
-        stream.seek(_CONTROL_SIZE + write_offset)
-        stream.write(frame)
-        stream.flush()
-        os.fsync(stream.fileno())
-        new_write = (write_offset + len(frame)) % data_size
-        new_cursor = replace(cursor, generation=cursor.generation + 1,
+                if cursor.write_offset < cursor.oldest_offset:
+                    if len(frame) < cursor.oldest_offset - cursor.write_offset:
+                        padding = 0
+                        break
+                elif len(frame) <= tail and len(frame) < free:
+                    padding = 0
+                    break
+                elif len(frame) > tail and tail + len(frame) < free:
+                    padding = tail
+                    break
+                cursor = _advance_oldest(stream, cursor, data_size)
+            if padding:
+                stream.seek(_CONTROL_SIZE + cursor.write_offset)
+                if padding >= _FRAME.size:
+                    stream.write(_FRAME.pack(0, 0))
+                    stream.write(bytes(padding - _FRAME.size))
+                else:
+                    stream.write(bytes(padding))
+            write_offset = (cursor.write_offset + padding) % data_size
+            stream.seek(_CONTROL_SIZE + write_offset)
+            stream.write(frame)
+            stream.flush()
+            os.fsync(stream.fileno())
+            new_write = (write_offset + len(frame)) % data_size
+            cursor = replace(cursor, generation=cursor.generation + 1,
                              write_offset=new_write, used_bytes=cursor.used_bytes + padding
                              + len(frame))
-        stream.seek((new_cursor.generation % 2) * _SLOT.size)
-        stream.write(_slot_bytes(new_cursor))
-        stream.flush()
-        os.fsync(stream.fileno())
-        return new_cursor.evicted_frames
+            stream.seek((cursor.generation % 2) * _SLOT.size)
+            stream.write(_slot_bytes(cursor))
+            stream.flush()
+            os.fsync(stream.fileno())
+            last = event
+        return cursor.evicted_frames
+
+
+def append_journal(path: Path, event: Event) -> int:
+    """Append one canonical event and return cumulative ring evictions."""
+    return append_journal_many(path, [event])

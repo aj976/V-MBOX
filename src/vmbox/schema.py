@@ -12,6 +12,13 @@ from uuid import UUID, uuid5
 from vmbox.canonical import canonical_json
 
 ModelT = TypeVar("ModelT", bound="SchemaModel")
+_HINT_CACHE: dict[type[SchemaModel], dict[str, Any]] = {}
+
+
+def _model_hints(model_type: type[SchemaModel]) -> dict[str, Any]:
+    if model_type not in _HINT_CACHE:
+        _HINT_CACHE[model_type] = get_type_hints(model_type)
+    return _HINT_CACHE[model_type]
 
 
 def _valid_type(value: Any, annotation: Any) -> bool:
@@ -69,7 +76,7 @@ def _encode(value: Any) -> Any:
 @dataclass(frozen=True)
 class SchemaModel:
     def __post_init__(self) -> None:
-        hints = get_type_hints(type(self))
+        hints = _model_hints(type(self))
         for field in fields(self):
             value = getattr(self, field.name)
             if not _valid_type(value, hints[field.name]):
@@ -85,7 +92,7 @@ class SchemaModel:
                 f"{cls.__name__}: missing {sorted(names - set(data))}; "
                 f"extra {sorted(set(data) - names)}"
             )
-        hints = get_type_hints(cls)
+        hints = _model_hints(cls)
         decoded = {name: _decode(value, hints[name]) for name, value in data.items()}
         return cls(**decoded)
 
