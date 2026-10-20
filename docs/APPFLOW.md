@@ -95,7 +95,7 @@ flowchart TD
   E --> F[Optional: crash-injection runs on live recorder]
   E --> G[Compute metrics vs labels]
   F --> G
-  G --> H[results.json + summary tables with CIs]
+  G --> H[per-run result.json; planned M8 results.json + summary tables with CIs]
 ```
 
 Rules for this flow:

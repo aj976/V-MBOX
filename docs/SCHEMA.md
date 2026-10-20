@@ -246,6 +246,7 @@ If multiple candidates remain, the matcher writes `match_review.json` with `run_
 ## 9. Evaluation result
 
 Template, not a measurement. `null` metrics mean "not measured". A result is invalid if any provenance field is missing. `tool_versions.etw_pywintrace` is required when ETW/pywintrace was used and otherwise is `null`.
+Each replay run writes one canonical `result.json` containing the object below. The cross-run `results.json` and summary tables in the experiment flow are planned M8 aggregate artifacts; their format is not defined in schema version 1.
 
 ```json
 {
@@ -277,3 +278,5 @@ Template, not a measurement. `null` metrics mean "not measured". A result is inv
 ```
 
 `strategy` is exactly one of `unbounded`, `fixed`, `priority`, `context_aware`, `fifo_ring`. For `unbounded`, both `budget_bytes` and `budget_fraction_of_full` are `null`; for every other strategy both are required and the budget is nonnegative. `bytes_retained` is required for all strategies and is `null` until measured, then a nonnegative integer. The *full size* for one trace is the `bytes_retained` of its unbounded run using the same serialization. A budgeted result computes `budget_fraction_of_full = budget_bytes / full_size`; a zero or unmeasured full size makes that comparison unavailable, never zero or infinity. Fractions above 1 are valid when a budget exceeds full size. Tables and plots show `n/a (unbounded)` for the unbounded fraction and use it as a reference line, never as a competing strategy. The zero seed in this template is structural, not a run measurement. The all-zero hashes and commit are template tokens; a real result must replace them with recorded provenance. All measured numbers come from runs.
+
+For offline replay, `event_loss_rate` is computed only against normalized events already present in the verified raw trace. It does not measure upstream ETW or Sysmon loss; those source counters are reported separately and remain unmeasured when the source API does not expose them.

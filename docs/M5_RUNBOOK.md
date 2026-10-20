@@ -1,6 +1,6 @@
-# M5 scenario labels and review — current implementation
+# M5 scenario labels and evaluation
 
-The VM-only scenario runner, Sysmon-only raw capture script, and their live matching are **unverified until run on a Windows VM with a real captured trace**. The general `vmbox record` command is still planned. Do not treat a scenario run by itself as an evaluated result. M5 metric functions are unit-tested on synthetic cases; no strategy comparison or VM M5 metric has been measured.
+The `query_connect` seed-1 path has been run on the Windows VM from Sysmon capture through label review, freeze, unbounded replay, and local-chain verification. Its canonical result and limitations are recorded in [M5_QUERY_CONNECT_SEED1_UNBOUNDED.result.json](M5_QUERY_CONNECT_SEED1_UNBOUNDED.result.json) and [M5_FINDINGS_QUERY_CONNECT_SEED1.md](M5_FINDINGS_QUERY_CONNECT_SEED1.md). The other scenario families remain unverified on the VM. The general `vmbox record` command is still planned. Do not treat a scenario run by itself as an evaluated result or the one development run as a strategy comparison.
 
 The scenario runner supports three benign simulation families: `child_chain`, `query_connect`, and `benign_lookalike`. `query_connect` only opens a query-limited process handle and makes a loopback connection; it does not inject code or modify another process. Each run starts a uniquely named marker process with a nonce in its image name. The runner writes canonical `labels.draft.json` before executing the workload. Windows are inclusive offsets from the marker event, based on a five-second intended workload plus three seconds of collection tolerance; they are not adjusted after strategy results are seen. Seeded benign noise runs alongside the family. The marker launcher and scenario/event pairing need a VM capture before they can be claimed to work.
 
@@ -47,5 +47,5 @@ python .\scripts\m5_eval.py --trace .\runs\family1_trace.jsonl --labels .\runs\f
 python -m vmbox.cli verify --evidence .\runs\family1_unbounded
 ```
 
-The harness uses the actual journal and sealed-segment encoding, then measures `journal.bin` plus sealed segments and tombstones. It excludes receipts. The result has no experimental budget; unmeasured latency, loss, crash, and reconstruction metrics remain `null`. The manifest's allocation equals the exact serialized retained size and is used only to satisfy the session storage format. This offline result is `chained` at best and is not forensic evidence. VM behavior and live capture are unverified until the scenario is run on the Windows VM.
+The harness uses the actual journal and sealed-segment encoding, then measures `journal.bin` plus sealed segments and tombstones. It excludes receipts. The result has no experimental budget; unmeasured latency, crash, and reconstruction metrics remain `null`. Replay event loss, when present, is measured relative to events already in the verified raw trace; it does not measure Sysmon upstream loss. The manifest's allocation equals the exact serialized retained size and is used only to satisfy the session storage format. This offline result is `chained` at best and is not forensic evidence.
 

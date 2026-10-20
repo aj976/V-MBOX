@@ -102,7 +102,7 @@ M5 can start in parallel with M3–M4 but labels must freeze before M6 tuning.
 - At least 3 scenario families, e.g. stager → remote-thread injection → outbound connection; child-process chain → connection; benign-lookalike (software installer / updater that also spawns and connects)
 - Benign noise workloads (browsing, office, build) with randomized parameters per seed
 - Label matching rules, manual spot-check of matched events
-- Eval harness: replay trace × strategy × budget × seed → `results.json`
+- Eval harness: replay trace × strategy × budget × seed → per-run `result.json`
 - Metrics implemented and unit-tested on synthetic cases with known answers
 - **Freeze labels** (hash recorded)
 
@@ -110,6 +110,8 @@ M5 can start in parallel with M3–M4 but labels must freeze before M6 tuning.
 - Harness runs end to end with dummy strategy and an unbounded baseline (coverage ≈ collection coverage)
 - Metric functions pass hand-computed test cases
 - Labels frozen and hashed; held-out scenario set designated
+
+**Status (2026-10-20): complete for M5.** The strategy-facing harness is exercised end to end by a synthetic dummy and the unbounded baseline. Metric helpers pass hand-computed synthetic cases. A real `query_connect` trace was captured, manually reviewed, frozen, replayed, and locally verified; its limits are recorded beside its result. `child_chain` is designated held-out and has not been used for tuning. Further strategy implementations and comparisons belong to M6; more VM runs and statistical aggregation belong to M8.
 
 ---
 
