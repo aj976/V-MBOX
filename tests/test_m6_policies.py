@@ -9,6 +9,7 @@ from test_eval_harness import _inputs, _versions
 
 from scripts.m6_eval import reference_bytes
 from vmbox.collect.trace import read_trace
+from vmbox.eval.audit import audit_run
 from vmbox.eval.harness import run_evaluation
 from vmbox.eval.policies import PolicyStrategy
 from vmbox.eval.strategy import UnboundedStrategy
@@ -120,6 +121,15 @@ def test_segmented_replay_uses_same_budget_and_verifies_chain(tmp_path: Path) ->
             assert verify_chain(directory, manifest).status == "ok"
             if name == "priority" and budget == 4096:
                 assert len(list(directory.glob("seg_*.tomb"))) >= 1
+    audit = audit_run(trace, labels, tmp_path / "segmented_priority_4096")
+    assert audit.collected_steps == 1
+    assert audit.sealed_steps == 0
+    assert audit.journal_only_steps == 1
+    assert audit.missing_steps == 0
+    assert audit.sealed_coverage == 0.0
+    assert audit.tombstones >= 1
+    full_audit = audit_run(trace, labels, tmp_path / "full_segmented")
+    assert full_audit.sealed_steps == 1
 
 
 def test_reference_rejects_mismatched_frozen_labels(tmp_path: Path) -> None:
