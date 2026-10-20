@@ -100,11 +100,23 @@ The write-once file `manifest.json` contains exactly `canonical_json(manifest)` 
 }
 ```
 
-Offline evaluation example (same fields as above except):
+Offline evaluation example:
 
 ```text
-"mode": "offline_eval",
-"anchor": null
+{
+  "schema_version": 1,
+  "mode": "offline_eval",
+  "session_id": "uuid",
+  "boot_id": "string",
+  "host": "hostname",
+  "start_ts_ns": 0,
+  "collector_version": "0.1.0",
+  "config_hash": "sha256:...",
+  "strategy": "unbounded",
+  "budget_bytes": 67108864,
+  "journal_bytes": 8388608,
+  "anchor": null
+}
 ```
 
 ## 3. Journal (unsealed)

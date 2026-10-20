@@ -42,8 +42,17 @@ def test_schema_examples_load_and_validate():
 def test_manifest_mode_anchor_rules():
     live = examples()[1]
     assert SessionManifest.from_dict(live).mode == "live"
+    text = SCHEMA.read_text(encoding="utf-8")
+    offline_example = json.loads(re.search(
+        r"Offline evaluation example:\s*```text\s*(.*?)```", text, re.DOTALL
+    ).group(1))
+    assert SessionManifest.from_dict(offline_example).mode == "offline_eval"
     with pytest.raises(ValueError):
         SessionManifest.from_dict({**live, "anchor": None})
+    with pytest.raises(ValueError):
+        SessionManifest.from_dict({**live, "anchor": {
+            "endpoint": "", "pubkey_fingerprint": "sha256:..."
+        }})
     with pytest.raises(ValueError):
         SessionManifest.from_dict({key: value for key, value in live.items() if key != "mode"})
     offline = {**live, "mode": "offline_eval", "anchor": None}

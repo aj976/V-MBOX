@@ -168,6 +168,11 @@ class AnchorInfo(SchemaModel):
     endpoint: str
     pubkey_fingerprint: str
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.endpoint.strip() or not self.pubkey_fingerprint.strip():
+            raise ValueError("anchor requires endpoint and public key fingerprint")
+
 
 @dataclass(frozen=True)
 class SessionManifest(SchemaModel):
