@@ -148,16 +148,16 @@ Pure metric helpers use Kendall-style pair agreement for identical sets of order
 
 | Threat | Handled? | How |
 |---|---|---|
-| Crash / power loss | Partly | Journal + sealed segments; data between flushes can be lost, quantified |
-| Dropped telemetry | Detected | `CAPTURE_GAP`, seq gaps |
+| Crash / power loss | Designed for partial recovery; live behavior unverified | Journal + sealed segments; data between flushes may be lost |
+| Dropped telemetry | Only collector-observed loss | `CAPTURE_GAP` and seq gaps; Sysmon upstream loss is not measured |
 | Storage saturation | Handled | Budgeted eviction with tombstones |
 | Torn writes | Detected | CRC, footer, atomic rename |
-| Modification of stored records | Detected | Chain + anchored receipts |
+| Modification of stored records | Locally detectable unless the whole chain is rewritten; anchored range externally constrained | Chain + signed receipts |
 | Full chain rewrite by host-level attacker | Detected only for anchored range | Anchor signatures |
 | Compromised collector (fabrication/suppression) | **Not prevented** | Documented limit; tested in M9 to show behavior |
 | Manipulated timestamps | **Not prevented** | seq ordering + anchor time give partial cross-check |
 | Compromised anchor | Out of scope | |
-| Evidence never captured | Unrecoverable | Reported as collection coverage |
+| Evidence never captured | Unrecoverable | Only labeled scenario steps can contribute to measured collection coverage |
 
 ## 10. Report design
 
@@ -188,3 +188,5 @@ Style: plain, high-contrast, no alarm colors for inferences. Red is reserved for
 | D8 | UUIDv5 from session ID and sequence | Random event IDs | Labels remain stable across strategy replays |
 | D9 | Two checksummed journal cursor slots and explicit wrap padding | Scan an unmarked ring | Identifies the live frame window and flags torn or stale bytes after wrap |
 | D10 | Tombstone metadata has an unkeyed canonical checksum | No tombstone checksum | Detects accidental byte corruption while leaving host-rewrite limits explicit |
+| D12 | HMAC-authenticated canonical TCP checkpoints with separately signed Ed25519 receipts on an isolated lab network | Unauthenticated TCP or TLS-first deployment | Prevents unauthenticated checkpoint submission while retaining the existing independently verifiable receipt format; no confidentiality is claimed, and second-VM behavior remains unverified |
+| D13 | Live Sysmon-only recorder with bounded journal flush batches and batch-local selection | Unfiltered ETW-first live recorder | The M1 unfiltered ETW spike had measured overflow; live timing and long-run RAM behavior still require VM validation |

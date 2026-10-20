@@ -4,7 +4,7 @@ V-MBOX is a CLI tool plus two long-running processes (recorder, anchor). There i
 
 ## 1. Commands
 
-Current implementation: `python -m vmbox.cli verify --evidence <dir>` checks the local canonical manifest, segment/tombstone chain, and journal CRC. Add `--anchor-pubkey <public.pem>` to verify the signed host receipt chain against the manifest fingerprint and local segments. Add `--anchor-receipts <export-dir>` to compare with an anchor-side `receipts/` export. Without that export, the host receipt tail is unconfirmed against anchor state. The anchor ledger's offline signing core is implemented; its second-VM transport is **unverified until run on the second VM**. `recover`, `timeline`, and `report` are implemented for existing evidence. Forced-kill and power-off recovery are **unverified until run on Windows VM**; live `record` and aggregate `eval` remain planned.
+Current implementation: `python -m vmbox.cli verify --evidence <dir>` checks the local canonical manifest, segment/tombstone chain, and journal CRC. Add `--anchor-pubkey <public.pem>` to verify the signed host receipt chain against the manifest fingerprint and local segments. Add `--anchor-receipts <export-dir>` to compare with an anchor-side `receipts/` export. Without that export, the host receipt tail is unconfirmed against anchor state. `record`, `anchor`, `anchor-sync`, `recover`, `timeline`, and `report` are implemented; see `LIVE_RUNBOOK.md` for the live commands. Live capture and second-VM transport are **unverified until run on the Windows VMs**. Forced-kill and power-off recovery remain unverified. M8 offline aggregation is implemented in scripts; the full experiment matrix still requires independent VM traces.
 
 | Command | Purpose | Key options |
 |---|---|---|

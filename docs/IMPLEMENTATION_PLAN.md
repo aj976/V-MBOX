@@ -48,6 +48,10 @@ M5 can start in parallel with M3–M4 but labels must freeze before M6 tuning.
 
 ## M2 — Pipeline: collect → normalize → raw trace → replay (M)
 
+**Development status (2026-10-20):** The synthetic live callback and replay
+produce byte-identical normalized events from the same raw trace. Windows VM
+live/replay identity and forced queue-overflow behavior still need a new VM run.
+
 **Tasks**
 - `Source` interface, `EtwSource`, `SysmonSource`, `ReplaySource`
 - Normalizer assigning `seq`, `session_id`, `boot_id`, handling capture status
@@ -80,6 +84,13 @@ M5 can start in parallel with M3–M4 but labels must freeze before M6 tuning.
 ---
 
 ## M4 — Anchor and checkpoints (M)
+
+**Development status (2026-10-20):** The offline ledger and signed receipt
+verification are implemented. A bounded HMAC-authenticated TCP transport,
+write-once key setup, host checkpoint retry, and a Sysmon-only live recorder
+pass loopback/synthetic tests. Second-VM transport, outage recovery, and
+power-loss durability are **unverified until run on the Windows VMs**; use
+`LIVE_RUNBOOK.md` to validate them. The private key must stay on the anchor VM.
 
 **Tasks**
 - Anchor service with Ed25519 key, chained signed receipts
