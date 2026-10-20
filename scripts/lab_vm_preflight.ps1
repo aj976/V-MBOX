@@ -6,7 +6,8 @@ param(
     [string]$AnchorAddress = '192.168.189.129',
     [string]$MonitoredName = 'ajjj',
     [string]$AnchorName = 'VMBOX-ANCHOR',
-    [string]$UserName = 'aatmi',
+    [string]$MonitoredUser = 'ajjj\aatmi',
+    [string]$AnchorUser = 'VMBOX-ANCHOR\aatmi',
     [string]$RepoPath = 'C:\Users\aatmi\OneDrive\Desktop\vmbox'
 )
 
@@ -15,9 +16,8 @@ if ($MonitoredAddress -eq $AnchorAddress) {
     throw 'The monitored and anchor addresses must differ.'
 }
 
-$monitoredCredential = Get-Credential -UserName "$MonitoredName\$UserName" -Message 'Monitored VM password'
-$anchorCredential = Get-Credential -UserName "$AnchorName\$UserName" -Message 'Anchor VM password'
-if ($null -eq $monitoredCredential -or $null -eq $anchorCredential) {
+$monitoredCredential = Get-Credential -UserName $MonitoredUser -Message 'Monitored VM account password (not the Windows Hello PIN)'
+if ($null -eq $monitoredCredential) {
     throw 'Credential prompt cancelled.'
 }
 
@@ -25,6 +25,10 @@ $sessions = @()
 try {
     $monitoredSession = New-PSSession -ComputerName $MonitoredAddress -Credential $monitoredCredential -Authentication Negotiate
     $sessions += $monitoredSession
+    $anchorCredential = Get-Credential -UserName $AnchorUser -Message 'Anchor VM account password (not the Windows Hello PIN)'
+    if ($null -eq $anchorCredential) {
+        throw 'Credential prompt cancelled.'
+    }
     $anchorSession = New-PSSession -ComputerName $AnchorAddress -Credential $anchorCredential -Authentication Negotiate
     $sessions += $anchorSession
 
