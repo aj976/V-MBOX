@@ -38,6 +38,7 @@ python .\scripts\m5_labels.py freeze --trace .\runs\family1_trace.jsonl --draft 
 `freeze` replays the trace again, requires all ambiguous matches to be resolved, and writes `labels.json` once. The printed SHA-256 covers the canonical labels including reviewer identity and timestamp. A changed window or review after freeze requires a new labels version. Zero-candidate attack steps are collection misses; a missing or ambiguous marker makes the run unlabeled. The manually reviewed label set and any future result must remain tied to the exact trace hash and run provenance.
 
 After freezing, run the unbounded reference in a fresh output directory. Read the actual Sysmon executable version from the installed binary. If the executable has a different name or location, change the first command accordingly. The package snapshot is taken from the same environment as this run; do not reuse one from another VM.
+If an evaluation is interrupted, leave that incomplete output directory untouched and retry under a new directory name. Evidence files are write-once.
 
 ```powershell
 $sysmonVersion = (Get-Item (Get-Command sysmon64.exe).Source).VersionInfo.ProductVersion
