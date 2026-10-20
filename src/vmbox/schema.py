@@ -299,15 +299,38 @@ class Reconstruction(SchemaModel):
 
 
 @dataclass(frozen=True)
+class LabelAnchor(SchemaModel):
+    nonce: str
+    event_type: str
+    image_regex: str
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.nonce or self.nonce not in self.image_regex or not self.event_type:
+            raise ValueError("anchor must identify its nonce and event type")
+        re.compile(self.image_regex)
+
+
+@dataclass(frozen=True)
+class PidLineage(SchemaModel):
+    step_id: str
+    relation: Literal["same_pid", "child_of"]
+
+
+@dataclass(frozen=True)
 class StepMatch(SchemaModel):
     event_type: str
     image_regex: str
     ts_window_ns: list[int]
+    pid_lineage: PidLineage | None
 
     def __post_init__(self) -> None:
         super().__post_init__()
         if len(self.ts_window_ns) != 2 or self.ts_window_ns[0] > self.ts_window_ns[1]:
             raise ValueError("invalid time window")
+        if not self.event_type:
+            raise ValueError("empty event type")
+        re.compile(self.image_regex)
 
 
 @dataclass(frozen=True)
@@ -319,12 +342,69 @@ class LabelStep(SchemaModel):
 
 
 @dataclass(frozen=True)
+class ReviewResolution(SchemaModel):
+    step_id: str
+    event_id: str
+    reviewer: str
+    reviewed_ts_ns: int
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.step_id or not self.event_id or not self.reviewer or self.reviewed_ts_ns < 0:
+            raise ValueError("incomplete review resolution")
+
+
+@dataclass(frozen=True)
+class AmbiguousMatch(SchemaModel):
+    step_id: str
+    candidate_event_ids: list[str]
+    resolution: ReviewResolution | None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if len(self.candidate_event_ids) < 2 or len(set(self.candidate_event_ids)) != len(
+            self.candidate_event_ids
+        ):
+            raise ValueError("ambiguous match needs distinct candidates")
+        if self.resolution is not None and (
+            self.resolution.step_id != self.step_id
+            or self.resolution.event_id not in self.candidate_event_ids
+        ):
+            raise ValueError("review resolution must select a candidate")
+
+
+@dataclass(frozen=True)
+class MatchReview(SchemaModel):
+    run_id: str
+    ambiguous: list[AmbiguousMatch]
+
+
+@dataclass(frozen=True)
 class GroundTruthLabel(SchemaModel):
     scenario_id: str
     run_id: str
     seed: int
+    anchor: LabelAnchor
     steps: list[LabelStep]
     benign_workload: str
+    review_resolutions: list[ReviewResolution]
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.seed < 0 or not self.scenario_id or not self.run_id:
+            raise ValueError("invalid label identity")
+        seen: set[str] = set()
+        for step in self.steps:
+            if not step.step_id or step.step_id in seen:
+                raise ValueError("duplicate or empty step_id")
+            if step.match.pid_lineage is not None and step.match.pid_lineage.step_id not in seen:
+                raise ValueError("PID lineage must reference an earlier step")
+            seen.add(step.step_id)
+        reviewed: set[str] = set()
+        for resolution in self.review_resolutions:
+            if resolution.step_id not in seen or resolution.step_id in reviewed:
+                raise ValueError("review resolution has unknown or duplicate step")
+            reviewed.add(resolution.step_id)
 
 
 @dataclass(frozen=True)

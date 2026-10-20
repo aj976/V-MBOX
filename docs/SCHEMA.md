@@ -202,19 +202,25 @@ An optional anchor-side export is a copy of the anchor's `receipts/` tree. The v
   "scenario_id": "inject_then_connect",
   "run_id": "uuid",
   "seed": 1337,
+  "anchor": { "nonce": "run_nonce", "event_type": "PROC_START", "image_regex": ".*vmbox_anchor_run_nonce\\.exe$" },
   "steps": [
     {
       "step_id": "s1",
       "description": "launch stager",
-      "match": { "event_type": "PROC_START", "image_regex": "...stager.exe", "ts_window_ns": [0, 0] },
+      "match": { "event_type": "PROC_START", "image_regex": ".*stager\\.exe$", "ts_window_ns": [0, 1000000000], "pid_lineage": null },
       "relevance": "attack"
     }
   ],
-  "benign_workload": "browse_office_build_v1"
+  "benign_workload": "browse_office_build_v1",
+  "review_resolutions": []
 }
 ```
 
-Matching of recorded events to steps is rule-based, then manually spot-checked. Unmatched attack steps count against *collection*, separately from *selection* (see metrics).
+`ts_window_ns` is `[start_offset_ns, end_offset_ns]`: integer nanosecond offsets, inclusive, relative to the unique anchor event's `ts_ns` (`t0`). The scenario runner starts each run by launching a marker with a per-run nonce in its image name and records that nonce in `anchor`. The matcher requires exactly one trace event with the anchor `event_type`, `image_regex`, and nonce in its process image. Zero or multiple anchors are hard errors; the run is unlabeled. Raw command-line content is not required. Windows and their stated tolerance are chosen from the scenario script's intended timing before any strategy is run. After freeze, changing a window creates a new label version.
+
+Step identity is `event_type` **and** `image_regex`, plus `pid_lineage` where relevant; time only narrows candidates. `pid_lineage` is either `null` or `{ "step_id": "earlier_step", "relation": "same_pid" }` / `{ "step_id": "earlier_step", "relation": "child_of" }`. The first relation compares event PIDs; the second compares the candidate's PPID to the earlier matched event's PID. A lineage-dependent step cannot resolve until its parent step has a unique match or a reviewed resolution. Missing attack steps are collection misses, not selection misses.
+
+If multiple candidates remain, the matcher writes `match_review.json` with `run_id`, `ambiguous` entries (`step_id`, `candidate_event_ids`, `resolution`). A resolution is `null` until manual review, then `{ "step_id": "s1", "event_id": "uuid", "reviewer": "name", "reviewed_ts_ns": 123 }`. The reviewer and timestamp are required; each resolved event ID must be one of the listed candidates. Before freezing `labels.json`, copy final resolutions to its required `review_resolutions` array, so the label hash covers the review decisions. `match_review.json` is a pre-freeze workpaper; once labels are frozen, any review or window change creates a new label version. The label example above is a template, not a measurement.
 
 ## 9. Evaluation result
 
