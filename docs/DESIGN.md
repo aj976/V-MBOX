@@ -134,13 +134,14 @@ Let `G` = ground-truth attack-relevant events (from frozen labels), `C` = subset
 | Collection coverage | `|C| / |G|` — separates collector limits from selection quality |
 | Evidence coverage | `|P| / |C|` (and `|P| / |G|` reported alongside) |
 | Reconstruction accuracy | Event ordering agreement (e.g. Kendall tau vs true order) and relation precision/recall vs labeled relations |
-| Storage efficiency | `|P| / bytes_retained`, i.e. relevant events per MB |
+| Storage efficiency | Relevant persisted events per MiB retained (`|P| × 1,048,576 / bytes_retained`); undefined for zero retained bytes |
 | Event-loss rate | Generated events not persisted *and* not accounted for by selection stats |
 | Persistence latency | Observation timestamp to durable write (p50, p95) |
 | Crash-recovery rate | Committed records recoverable after N forced terminations |
 | Overhead | CPU %, working set, disk bytes/s, with collector on vs off under the same workload |
 
 Statistics: multiple seeds per scenario, report mean with 95% CI, and the number of runs. Do not claim differences smaller than the variance.
+Pure metric helpers use Kendall-style pair agreement for identical sets of ordered event IDs, set-based relation precision/recall, and nearest-rank p50/p95 latency. The 95% interval helper is a seeded percentile bootstrap and returns `null` for fewer than two independent runs. Synthetic unit-test values are not VM measurements.
 
 ## 9. Threat model
 
