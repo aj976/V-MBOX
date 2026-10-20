@@ -190,6 +190,25 @@ Receipts are write-once canonical JSON files without a trailing LF, named `recei
 
 An optional anchor-side export is a copy of the anchor's `receipts/` tree. The verifier checks both the host receipts and export, including signatures, sequence, previous-receipt hashes, and each referenced segment hash against the host's segment chain. If the host log is a strict prefix of the anchor export, it reports `host receipts end at anchor_seq N, anchor has M` and marks the missing host tail incomplete. A mismatched shared prefix fails verification. Without an anchor export, the signed host range is `unconfirmed against anchor state`: host-side receipts alone cannot detect a truncated tail. Second-VM transport and power-loss durability are **unverified until run on the second VM**.
 
+### 6.1 Anchor transport (protocol version 1)
+
+The lab TCP transport sends one canonical JSON object plus LF per connection,
+with a 65,536-byte maximum line. A request has exactly
+`transport_version:1`, `checkpoint` (the §6 checkpoint object), and `auth`.
+`auth` is 64 lowercase hex characters: HMAC-SHA-256 using the shared 32-byte
+`auth.key` over `b"vmbox-anchor-request-v1\n" + canonical_json(request without auth)`.
+The anchor rejects noncanonical, oversized, unauthenticated, or malformed requests.
+It responds with exactly `transport_version:1` and either the signed §6 `receipt`
+or an `error` string. The host verifies the Ed25519 signature and exact checkpoint
+match before persisting the receipt. A transport failure leaves the segment
+chained-only and eligible for idempotent retry. To make retries stable,
+`checkpoint.host_ts_ns` is the sealed segment or tombstone `ts_end_ns`; the
+checkpoint is reconstructed from the verified chain, never from current time.
+This transport authenticates messages but does **not** encrypt them. It is for
+an isolated lab network, not a public listener. `private.pem` stays only on the
+anchor VM; the host uses `public.pem` and `auth.key`. Loopback behavior is tested;
+second-VM behavior is **unverified until run on the second VM**.
+
 ## 7. Reconstruction output
 
 ```json
