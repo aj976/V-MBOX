@@ -38,3 +38,19 @@ unexplained loss relative to events in the verified raw trace; it cannot measure
 Sysmon upstream loss. Integrity is `chained` at best for these offline sessions.
 If a run fails, keep its incomplete output directory and report the exact error;
 do not reuse or delete it during investigation.
+
+### Retention audit for completed runs
+
+`evidence_coverage` includes events recovered from the unverified journal. If the
+journal can hold the entire trace, that metric cannot distinguish the selectors.
+Run this read-only audit against the existing output directories to separate
+hash-chained sealed retention from journal-only retention. It changes no evidence
+files or result metrics.
+
+```powershell
+git pull origin main
+python .\scripts\m6_audit.py --trace .\runs\family1_trace.jsonl --labels .\runs\family1_labels\labels.json --run-root .\runs
+```
+
+Share the audit output for review. `sealed_coverage` is a diagnostic computed from
+verified sealed segments; it is not a field in the version-1 evaluation result.

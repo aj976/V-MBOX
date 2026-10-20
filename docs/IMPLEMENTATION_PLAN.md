@@ -122,8 +122,12 @@ FIFO, fixed allow-list, static priority, and context promotion under frozen rule
 `m6-general-v2`. The v2 tag adds target-PID activity and direct child inheritance to v1.
 Synthetic harness tests exercise four equal total budgets. The M6 batch path seals multiple
 segments, verifies the chain across tombstones, and uses priority/context scores for eviction.
-The real VM comparison remains not measured; commands are in `M6_RUNBOOK.md`. M6 exit is
-pending that run and review of its retained evidence and results.
+The Windows VM replay completed at the planned budgets according to operator output, with
+local chain verification for each run. The raw trace and result files remain on the VM;
+this repository has not independently reproduced them. Because the journal appears large
+enough to retain the whole trace, the reported coverage cannot distinguish selection
+quality. A sealed-versus-journal retention audit is now documented in `M6_RUNBOOK.md`.
+M6 exit review remains pending that audit and the recorded run artifacts.
 
 **Tasks**
 - Strategy interface; baselines (unbounded, FIFO ring)
