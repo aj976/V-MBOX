@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from vmbox.anchor.keys import create_anchor_keys, load_private_key
 from vmbox.anchor.ledger import AnchorLedger
 from vmbox.anchor.receipt_crypto import load_public_key, public_key_fingerprint
-from vmbox.anchor.transport import send_checkpoint, serve_anchor
+from vmbox.anchor.transport import fetch_receipt_log, send_checkpoint, serve_anchor
 from vmbox.schema import Checkpoint
 
 
@@ -71,3 +71,27 @@ def test_key_generation_is_write_once(tmp_path: Path) -> None:
     assert len((root / "auth.key").read_bytes()) == 32
     with pytest.raises(FileExistsError):
         create_anchor_keys(root)
+
+
+def test_receipt_export_is_complete_and_authenticated(tmp_path: Path) -> None:
+    private = Ed25519PrivateKey.generate()
+    server = serve_anchor("127.0.0.1:0", AnchorLedger(tmp_path, private), b"a" * 32)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        endpoint = f"127.0.0.1:{server.server_address[1]}"
+        session = str(uuid4())
+        expected = [send_checkpoint(endpoint, Checkpoint(session, index,
+                    "sha256:" + f"{index:064x}", index, index + 1),
+                    b"a" * 32, private.public_key()) for index in range(18)]
+        assert fetch_receipt_log(endpoint, session, b"a" * 32,
+                                 private.public_key()) == expected
+        with pytest.raises(ValueError, match="authentication"):
+            fetch_receipt_log(endpoint, session, b"b" * 32, private.public_key())
+        with pytest.raises(ValueError, match="signature"):
+            fetch_receipt_log(endpoint, session, b"a" * 32,
+                              Ed25519PrivateKey.generate().public_key())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

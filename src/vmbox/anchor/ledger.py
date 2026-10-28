@@ -47,6 +47,15 @@ class AnchorLedger:
         self.private_key = private_key
         self._lock = Lock()
 
+    def session_receipts(self, session_id: str) -> list[Receipt]:
+        """Read one validated session log without altering anchor state."""
+        from vmbox.integrity.receipts import read_receipts
+
+        session = _session_id(session_id)
+        with self._lock:
+            return read_receipts(self.root / "receipts" / session,
+                                 self.private_key.public_key())
+
     def accept(self, checkpoint: Checkpoint) -> Receipt:
         session = _session_id(checkpoint.session_id)
         if re.fullmatch(r"sha256:[0-9a-f]{64}", checkpoint.segment_hash) is None:

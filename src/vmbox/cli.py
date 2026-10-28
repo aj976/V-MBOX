@@ -1,7 +1,9 @@
 """V-MBOX command line. Commands are added as milestones become verified."""
 
 import argparse
+import webbrowser
 from pathlib import Path
+from uuid import uuid4
 
 from vmbox.integrity.chain import verify_chain
 from vmbox.reconstruct.build import build_reconstruction
@@ -14,14 +16,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vmbox")
     subcommands = parser.add_subparsers(dest="command", required=True)
     record = subcommands.add_parser("record", help="record Sysmon events on the lab VM")
-    record.add_argument("--anchor-endpoint", required=True)
-    record.add_argument("--anchor-pubkey", type=Path, required=True)
-    record.add_argument("--anchor-auth-key", type=Path, required=True)
-    record.add_argument("--out", type=Path, required=True)
+    record.add_argument("--profile")
+    record.add_argument("--anchor-endpoint")
+    record.add_argument("--anchor-pubkey", type=Path)
+    record.add_argument("--anchor-auth-key", type=Path)
+    record.add_argument("--out", type=Path)
     record.add_argument("--duration", type=float, required=True)
     record.add_argument("--strategy", choices=("fifo_ring", "fixed", "priority",
                                                "context_aware"), default="context_aware")
-    record.add_argument("--budget-bytes", type=int, required=True)
+    record.add_argument("--budget-bytes", type=int)
     record.add_argument("--journal-bytes", type=int, default=8 * 1024 * 1024)
     record.add_argument("--segment-events", type=int, default=128)
     record.add_argument("--queue-capacity", type=int, default=10000)
@@ -30,10 +33,25 @@ def main(argv: list[str] | None = None) -> int:
     keygen = subcommands.add_parser("anchor-keygen", help="create anchor-only keys")
     keygen.add_argument("--out", type=Path, required=True)
     anchor = subcommands.add_parser("anchor", help="serve signed checkpoints")
-    anchor.add_argument("--listen", required=True)
-    anchor.add_argument("--key", type=Path, required=True)
-    anchor.add_argument("--auth-key", type=Path, required=True)
-    anchor.add_argument("--store", type=Path, required=True)
+    anchor.add_argument("action", nargs="?", choices=("start",))
+    anchor.add_argument("--profile", default="demo")
+    anchor.add_argument("--listen")
+    anchor.add_argument("--key", type=Path)
+    anchor.add_argument("--auth-key", type=Path)
+    anchor.add_argument("--store", type=Path)
+    profile_cmd = subcommands.add_parser("profile", help="save local operator settings")
+    profile_cmd.add_argument("action", choices=("set",))
+    profile_cmd.add_argument("name")
+    profile_cmd.add_argument("--role", choices=("anchor", "monitored"), required=True)
+    profile_cmd.add_argument("--lab-root", type=Path, required=True)
+    profile_cmd.add_argument("--trial", required=True)
+    profile_cmd.add_argument("--endpoint", required=True)
+    finalize = subcommands.add_parser("finalize", help="sync and confirm anchor receipts")
+    finalize.add_argument("--evidence", type=Path)
+    finalize.add_argument("--profile", default="demo")
+    finalize.add_argument("--anchor-pubkey", type=Path)
+    finalize.add_argument("--anchor-auth-key", type=Path)
+    finalize.add_argument("--out", type=Path)
     sync = subcommands.add_parser("anchor-sync", help="retry pending signed checkpoints")
     sync.add_argument("--evidence", type=Path, required=True)
     sync.add_argument("--anchor-pubkey", type=Path, required=True)
@@ -53,11 +71,24 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--since", type=int, help="inclusive UTC nanoseconds")
             command.add_argument("--until", type=int, help="inclusive UTC nanoseconds")
     report = subcommands.add_parser("report", help="write JSON and HTML reports")
-    report.add_argument("--evidence", type=Path, required=True)
-    report.add_argument("--out", type=Path, required=True)
+    report.add_argument("--evidence", type=Path)
+    report.add_argument("--out", type=Path)
+    report.add_argument("--open", action="store_true")
+    report.add_argument("--profile", default="demo")
     report.add_argument("--anchor-pubkey", type=Path)
     report.add_argument("--anchor-receipts", type=Path)
     args = parser.parse_args(argv)
+    if args.command == "profile":
+        from vmbox.operator import Profile, save_profile
+
+        try:
+            path = save_profile(Profile(args.name, args.role, args.lab_root.resolve(),
+                                        args.trial, args.endpoint))
+        except (OSError, ValueError) as exc:
+            print(f"profile failed: {exc}")
+            return 2
+        print(f"profile_saved: {path}")
+        return 0
     if args.command == "anchor-keygen":
         from vmbox.anchor.keys import create_anchor_keys
 
@@ -74,6 +105,21 @@ def main(argv: list[str] | None = None) -> int:
         from vmbox.anchor.keys import load_private_key
         from vmbox.anchor.ledger import AnchorLedger
         from vmbox.anchor.transport import read_auth_key, serve_anchor
+
+        if args.action == "start":
+            from vmbox.operator import load_profile
+
+            try:
+                profile = load_profile(args.profile, "anchor")
+            except (OSError, ValueError) as exc:
+                print(f"anchor profile failed: {exc}")
+                return 2
+            args.listen = args.listen or profile.endpoint
+            args.key = args.key or profile.key_dir / "private.pem"
+            args.auth_key = args.auth_key or profile.auth_key
+            args.store = args.store or profile.lab_root / f"anchor_ledger_{profile.trial}"
+        if not all((args.listen, args.key, args.auth_key, args.store)):
+            parser.error("anchor requires start/profile or --listen, --key, --auth-key, --store")
 
         try:
             private = load_private_key(args.key)
@@ -109,6 +155,31 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "record":
         from vmbox.record.command import record_sysmon
 
+        record_profile: Profile | None = None
+
+        if args.profile:
+            from vmbox.operator import load_profile
+
+            try:
+                record_profile = load_profile(args.profile, "monitored")
+            except (OSError, ValueError) as exc:
+                print(f"record profile failed: {exc}")
+                return 2
+            args.anchor_endpoint = args.anchor_endpoint or record_profile.endpoint
+            args.anchor_pubkey = args.anchor_pubkey or record_profile.public_key
+            args.anchor_auth_key = args.anchor_auth_key or record_profile.auth_key
+            args.out = args.out or record_profile.lab_root / f"live_{uuid4().hex}"
+            args.budget_bytes = args.budget_bytes if args.budget_bytes is not None else 12 * 1048576
+            args.sysmon_config = record_profile.lab_root / "repo" / "docs" / "sysmon.xml"
+        if not args.anchor_endpoint:
+            parser.error("record requires --anchor-endpoint or --profile")
+        if not all((args.anchor_pubkey, args.anchor_auth_key, args.out)) \
+                or args.budget_bytes is None:
+            parser.error("record requires --anchor-pubkey, --anchor-auth-key, --out, "
+                         "--budget-bytes or --profile")
+
+        print(f"evidence: {args.out}", flush=True)
+
         try:
             digest, seen, overflow, pending = record_sysmon(
                 output=args.out, duration_s=args.duration,
@@ -128,9 +199,73 @@ def main(argv: list[str] | None = None) -> int:
         print(f"collector_queue_overflow: {overflow}")
         print(f"anchor_pending_segments: {pending}")
         print("sysmon_upstream_lost: not measured")
+        if record_profile is not None:
+            from vmbox.operator import remember_session
+
+            try:
+                remember_session(record_profile, args.out)
+            except (OSError, ValueError) as exc:
+                print(f"last-session shortcut unavailable: {exc}; use --evidence explicitly")
         return 3 if pending or overflow else 0
+    if args.command == "finalize":
+        from vmbox.anchor.finalize import finalize_evidence
+
+        if args.evidence is None:
+            from vmbox.operator import latest_session, load_profile
+
+            try:
+                args.evidence = latest_session(load_profile(args.profile, "monitored"))
+            except (OSError, ValueError) as exc:
+                print(f"finalize failed: {exc}")
+                return 2
+        print(f"evidence: {args.evidence}")
+
+        if args.anchor_pubkey is None or args.anchor_auth_key is None:
+            from vmbox.operator import load_profile
+
+            try:
+                profile = load_profile(args.profile, "monitored")
+            except (OSError, ValueError) as exc:
+                print(f"finalize profile failed: {exc}")
+                return 2
+            args.anchor_pubkey = args.anchor_pubkey or profile.public_key
+            args.anchor_auth_key = args.anchor_auth_key or profile.auth_key
+        try:
+            status, reason, export = finalize_evidence(
+                args.evidence, args.anchor_pubkey, args.anchor_auth_key, args.out)
+        except (OSError, ValueError, ConnectionError) as exc:
+            print(f"finalize failed: {exc}; anchor state is not confirmed")
+            return 3
+        print(f"anchor_export: {export}")
+        print(f"anchor: {reason}")
+        print(f"recovery: {status}")
+        return 2 if status == "tampered" else 3 if status == "incomplete" else 0
     if args.command == "report":
+        from vmbox.operator import default_export, default_report
         from vmbox.reconstruct.report import build_report, write_report
+
+        if args.evidence is None:
+            from vmbox.operator import latest_session, load_profile
+
+            try:
+                args.evidence = latest_session(load_profile(args.profile, "monitored"))
+            except (OSError, ValueError) as exc:
+                print(f"report failed: {exc}")
+                return 2
+        print(f"evidence: {args.evidence}")
+
+        args.out = args.out or default_report(args.evidence)
+        if args.anchor_pubkey is None and args.anchor_receipts is None:
+            export = default_export(args.evidence)
+            if export.exists():
+                from vmbox.operator import load_profile
+
+                try:
+                    args.anchor_pubkey = load_profile(args.profile, "monitored").public_key
+                    args.anchor_receipts = export
+                except (OSError, ValueError) as exc:
+                    print(f"report profile failed: {exc}")
+                    return 2
 
         if args.anchor_receipts is not None and args.anchor_pubkey is None:
             parser.error("--anchor-receipts requires --anchor-pubkey")
@@ -150,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"report_json: {paths[0]}")
         print(f"report_html: {paths[1]}")
         print(f"content_hash: {built.content_hash}")
+        if args.open and not webbrowser.open(paths[1].resolve().as_uri()):
+            print("report created, but could not open a browser")
         return 2 if recovered.status == "tampered" else 3 if recovered.status == "incomplete" else 0
     if args.command in {"recover", "timeline"}:
         if args.anchor_receipts is not None and args.anchor_pubkey is None:
